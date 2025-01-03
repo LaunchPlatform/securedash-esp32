@@ -1,5 +1,8 @@
+use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::gpio::{Input, InputPin, InterruptType, PinDriver, Pull};
 use esp_idf_svc::hal::prelude::Peripherals;
+use esp_idf_svc::hal::task::block_on;
+use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_svc::sys::{
     esp, esp_partition_find_first, esp_partition_subtype_t_ESP_PARTITION_SUBTYPE_DATA_FAT,
     esp_partition_type_t_ESP_PARTITION_TYPE_DATA, esp_vfs_fat_mount_config_t, tinyusb_config_t,
@@ -7,8 +10,8 @@ use esp_idf_svc::sys::{
     tinyusb_msc_storage_init_spiflash, tinyusb_msc_storage_mount, tinyusb_msc_storage_unmount,
     wl_handle_t, wl_mount,
 };
-use futures::executor;
-use futures::executor::{LocalPool, LocalSpawner};
+use esp_idf_svc::timer::EspTaskTimerService;
+use esp_idf_svc::wifi::{AsyncWifi, AuthMethod, ClientConfiguration, Configuration, EspWifi};
 use std::ffi::CString;
 use std::time::Duration;
 use std::{fs, thread};
@@ -29,10 +32,50 @@ unsafe extern "C" fn storage_premount_changed_cb(event: *mut tinyusb_msc_event_t
     );
 }
 
+async fn connect_wifi() -> anyhow::Result<AsyncWifi<EspWifi<'static>>> {
+    let peripherals = Peripherals::take()?;
+    let sys_loop = EspSystemEventLoop::take()?;
+    let timer_service = EspTaskTimerService::new()?;
+    let nvs = EspDefaultNvsPartition::take()?;
+
+    let mut wifi = AsyncWifi::wrap(
+        EspWifi::new(peripherals.modem, sys_loop.clone(), Some(nvs))?,
+        sys_loop,
+        timer_service,
+    )?;
+
+    let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
+        ssid: "FIXME".try_into().unwrap(),
+        bssid: None,
+        auth_method: AuthMethod::WPA2Personal,
+        password: "FIXME".try_into().unwrap(),
+        channel: None,
+        scan_method: Default::default(),
+        pmf_cfg: Default::default(),
+    });
+
+    wifi.set_configuration(&wifi_configuration)?;
+
+    wifi.start().await?;
+    log::info!("Wifi started");
+
+    wifi.connect().await?;
+    log::info!("Wifi connected");
+
+    wifi.wait_netif_up().await?;
+    log::info!("Wifi netif up");
+
+    Ok(wifi)
+}
+
 async fn run_async() -> Result<(), anyhow::Error> {
     log::info!("Hello, world!");
 
-    log::info!("Hello, world! 2");
+    let wifi = connect_wifi().await?;
+    log::info!(
+        "Connected wifi: {:#?}",
+        wifi.wifi().sta_netif().get_ip_info()?
+    );
 
     let mut handle = wl_handle_t::default();
     let base_path = CString::new("/disk").unwrap();
@@ -107,13 +150,10 @@ fn main() -> Result<(), anyhow::Error> {
     // As a result, the main thread is constantly starving because of the higher prio `async-io` thread
     //
     // To use async networking IO, make your `main()` minimal by just spawning all work in a new thread
-    std::thread::Builder::new()
+    thread::Builder::new()
         .stack_size(60000)
-        .spawn(|| executor::block_on(async { run_async().await }))
+        .spawn(|| block_on(async { run_async().await }))
         .unwrap()
         .join()
         .unwrap()
-        .unwrap();
-
-    Ok(())
 }
