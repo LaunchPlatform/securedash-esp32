@@ -1,4 +1,4 @@
-[target.xtensa-esp32s3-none-elf]
+[target.xtensa-esp32s3-espidf]
 runner = "probe-rs run --chip=esp32s3"
 
 [env]
@@ -9,7 +9,7 @@ rustflags = [
   "-C", "link-arg=-nostartfiles",
 ]
 
-target = "xtensa-esp32s3-none-elf"
+target = "xtensa-esp32s3-espidf"
 
 [unstable]
 build-std = ["alloc", "core"]
