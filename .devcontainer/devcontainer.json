@@ -1,15 +1,20 @@
 {
-  "name": "{{ crate_name }}",
-  // Select between image and build properties to pull or build the image.
-  // "image": "docker.io/espressif/idf-rust:{{ mcu }}_latest",
+  "name": "securedash",
+  // Select between image and build propieties to pull or build the image.
+  // "image": "docker.io/espressif/idf-rust:esp32s3_latest",
   "build": {
     "dockerfile": "Dockerfile",
     "args": {
       "CONTAINER_USER": "esp",
       "CONTAINER_GROUP": "esp",
-      "ESP_BOARD": "{{ mcu }}"
+      "ESP_BOARD": "esp32s3"
     }
   },
+  // https://github.com/serialport/serialport-rs/issues/153
+  "runArgs": [
+    "--mount",
+    "type=bind,source=/run/udev,target=/run/udev,readonly"
+  ],
   "customizations": {
     "vscode": {
       "settings": {
@@ -40,9 +45,9 @@
     }
   },
   "forwardPorts": [
-    8000,
-    3333
+    3333,
+    8000
   ],
-  "workspaceMount": "source=${localWorkspaceFolder},target=/home/esp/{{ crate_name }},type=bind,consistency=cached",
-  "workspaceFolder": "/home/esp/{{ crate_name }}"
+  "workspaceMount": "source=${localWorkspaceFolder},target=/home/esp/securedash,type=bind,consistency=cached",
+  "workspaceFolder": "/home/esp/securedash"
 }

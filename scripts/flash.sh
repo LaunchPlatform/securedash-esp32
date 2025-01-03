@@ -18,4 +18,4 @@ case "$1" in
     ;;
 esac
 
-web-flash --chip {{ mcu }} target/{{ rust_target }}/${BUILD_MODE}/{{ crate_name }}
+web-flash --chip esp32s3 target/xtensa-esp32s3-espidf/${BUILD_MODE}/securedash
