@@ -1,9 +1,13 @@
+use esp_idf_svc::hal::gpio::{Input, InputPin, InterruptType, PinDriver, Pull};
+use esp_idf_svc::hal::prelude::Peripherals;
 use esp_idf_svc::sys::{
     esp, esp_partition_find_first, esp_partition_subtype_t_ESP_PARTITION_SUBTYPE_DATA_FAT,
     esp_partition_type_t_ESP_PARTITION_TYPE_DATA, esp_vfs_fat_mount_config_t, tinyusb_config_t,
     tinyusb_driver_install, tinyusb_msc_event_t, tinyusb_msc_spiflash_config_t,
     tinyusb_msc_storage_init_spiflash, wl_handle_t, wl_mount,
 };
+use futures::executor;
+use futures::executor::{LocalPool, LocalSpawner};
 use std::ffi::CString;
 use std::thread;
 use std::time::Duration;
@@ -24,14 +28,7 @@ unsafe extern "C" fn storage_premount_changed_cb(event: *mut tinyusb_msc_event_t
     );
 }
 
-fn main() {
-    // It is necessary to call this function once. Otherwise some patches to the runtime
-    // implemented by esp-idf-sys might not link properly. See https://github.com/esp-rs/esp-idf-template/issues/71
-    esp_idf_svc::sys::link_patches();
-
-    // Bind the log crate to the ESP Logging facilities
-    esp_idf_svc::log::EspLogger::initialize_default();
-
+async fn run_async() -> Result<(), anyhow::Error> {
     log::info!("Hello, world!");
 
     log::info!("Hello, world! 2");
@@ -76,9 +73,38 @@ fn main() {
     }
 
     log::info!("installed!");
+    let peripherals = Peripherals::take()?;
 
+    let mut button = PinDriver::input(peripherals.pins.gpio14)?;
+    button.set_pull(Pull::Up)?;
     loop {
-        thread::sleep(Duration::from_millis(1000));
-        log::info!("sleep...");
+        // Asynchronously wait for GPIO events, allowing other tasks
+        // to run, or the core to sleep.
+        button.wait_for_low().await?;
+        log::info!("Button pressed!");
+        button.wait_for_high().await?;
+        log::info!("Button released!");
     }
+
+    Ok(())
+}
+
+fn main() -> Result<(), anyhow::Error> {
+    esp_idf_svc::sys::link_patches();
+    esp_idf_svc::log::EspLogger::initialize_default();
+
+    // This thread is necessary because the ESP IDF main task thread is running with a very low priority that cannot be raised
+    // (lower than the hidden posix thread in `async-io`)
+    // As a result, the main thread is constantly starving because of the higher prio `async-io` thread
+    //
+    // To use async networking IO, make your `main()` minimal by just spawning all work in a new thread
+    std::thread::Builder::new()
+        .stack_size(60000)
+        .spawn(|| executor::block_on(async { run_async().await }))
+        .unwrap()
+        .join()
+        .unwrap()
+        .unwrap();
+
+    Ok(())
 }
