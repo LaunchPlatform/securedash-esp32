@@ -1,5 +1,6 @@
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::gpio::{Input, InputPin, InterruptType, PinDriver, Pull};
+use esp_idf_svc::hal::modem;
 use esp_idf_svc::hal::prelude::Peripherals;
 use esp_idf_svc::hal::task::block_on;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
@@ -35,14 +36,13 @@ unsafe extern "C" fn storage_premount_changed_cb(event: *mut tinyusb_msc_event_t
     );
 }
 
-async fn connect_wifi() -> anyhow::Result<AsyncWifi<EspWifi<'static>>> {
-    let peripherals = Peripherals::take()?;
+async fn connect_wifi(modem: modem::Modem) -> anyhow::Result<AsyncWifi<EspWifi<'static>>> {
     let sys_loop = EspSystemEventLoop::take()?;
     let timer_service = EspTaskTimerService::new()?;
     let nvs = EspDefaultNvsPartition::take()?;
 
     let mut wifi = AsyncWifi::wrap(
-        EspWifi::new(peripherals.modem, sys_loop.clone(), Some(nvs))?,
+        EspWifi::new(modem, sys_loop.clone(), Some(nvs))?,
         sys_loop,
         timer_service,
     )?;
@@ -74,7 +74,9 @@ async fn connect_wifi() -> anyhow::Result<AsyncWifi<EspWifi<'static>>> {
 async fn run_async() -> Result<(), anyhow::Error> {
     log::info!("Hello, world!");
 
-    let wifi = connect_wifi().await?;
+    let peripherals = Peripherals::take().expect("@@@ Take Peripherals failed");
+    let wifi = connect_wifi(peripherals.modem).await?;
+
     log::info!(
         "Connected wifi: {:#?}",
         wifi.wifi().sta_netif().get_ip_info()?
@@ -118,7 +120,6 @@ async fn run_async() -> Result<(), anyhow::Error> {
     }
 
     log::info!("installed!");
-    let peripherals = Peripherals::take().expect("@@@ Take Peripherals failed");
 
     let mut button = PinDriver::input(peripherals.pins.gpio14)?;
     button.set_pull(Pull::Up)?;
