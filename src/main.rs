@@ -16,6 +16,9 @@ use std::ffi::CString;
 use std::time::Duration;
 use std::{fs, thread};
 
+const SSID: &str = env!("WIFI_SSID");
+const PASSWORD: &str = env!("WIFI_PASS");
+
 unsafe extern "C" fn storage_mount_changed_cb(event: *mut tinyusb_msc_event_t) {
     log::info!(
         "Mount changed: {}, {}",
@@ -45,10 +48,10 @@ async fn connect_wifi() -> anyhow::Result<AsyncWifi<EspWifi<'static>>> {
     )?;
 
     let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
-        ssid: "FIXME".try_into().unwrap(),
+        ssid: SSID.try_into().unwrap(),
         bssid: None,
         auth_method: AuthMethod::WPA2Personal,
-        password: "FIXME".try_into().unwrap(),
+        password: PASSWORD.try_into().unwrap(),
         channel: None,
         scan_method: Default::default(),
         pmf_cfg: Default::default(),
@@ -89,9 +92,7 @@ async fn run_async() -> Result<(), anyhow::Error> {
         )
     };
 
-    unsafe {
-        wl_mount(data_partition, &mut handle);
-    }
+    esp!(unsafe { wl_mount(data_partition, &mut handle) }).expect("failed to mount wl");
 
     let config_spi = tinyusb_msc_spiflash_config_t {
         wl_handle: handle,
@@ -117,7 +118,7 @@ async fn run_async() -> Result<(), anyhow::Error> {
     }
 
     log::info!("installed!");
-    let peripherals = Peripherals::take()?;
+    let peripherals = Peripherals::take().expect("@@@ Take Peripherals failed");
 
     let mut button = PinDriver::input(peripherals.pins.gpio14)?;
     button.set_pull(Pull::Up)?;
