@@ -4,13 +4,14 @@ use esp_idf_svc::sys::{
     esp, esp_partition_find_first, esp_partition_subtype_t_ESP_PARTITION_SUBTYPE_DATA_FAT,
     esp_partition_type_t_ESP_PARTITION_TYPE_DATA, esp_vfs_fat_mount_config_t, tinyusb_config_t,
     tinyusb_driver_install, tinyusb_msc_event_t, tinyusb_msc_spiflash_config_t,
-    tinyusb_msc_storage_init_spiflash, wl_handle_t, wl_mount,
+    tinyusb_msc_storage_init_spiflash, tinyusb_msc_storage_mount, tinyusb_msc_storage_unmount,
+    wl_handle_t, wl_mount,
 };
 use futures::executor;
 use futures::executor::{LocalPool, LocalSpawner};
 use std::ffi::CString;
-use std::thread;
 use std::time::Duration;
+use std::{fs, thread};
 
 unsafe extern "C" fn storage_mount_changed_cb(event: *mut tinyusb_msc_event_t) {
     log::info!(
@@ -82,6 +83,14 @@ async fn run_async() -> Result<(), anyhow::Error> {
         // to run, or the core to sleep.
         button.wait_for_low().await?;
         log::info!("Button pressed!");
+
+        esp!(unsafe { tinyusb_msc_storage_mount(base_path.as_ptr()) })?;
+
+        let contents = fs::read_to_string("/disk/myfile.txt").unwrap_or(String::from("N/A"));
+        log::info!("File content: {}", contents);
+
+        esp!(unsafe { tinyusb_msc_storage_unmount() })?;
+
         button.wait_for_high().await?;
         log::info!("Button released!");
     }
