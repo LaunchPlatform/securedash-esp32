@@ -77,12 +77,15 @@ async fn connect_wifi(modem: modem::Modem) -> anyhow::Result<AsyncWifi<EspWifi<'
     Ok(wifi)
 }
 
-fn post_chunked_request(client: &mut HttpClient<EspHttpConnection>, data: &[u8]) -> anyhow::Result<()> {
+fn post_chunked_request(
+    client: &mut HttpClient<EspHttpConnection>,
+    data: &[u8],
+) -> anyhow::Result<()> {
     // Prepare payload
 
     // Prepare headers and URL
     let headers = [("content-type", "text/plain")];
-    let url = "http://httpbin.org/post";
+    let url = "https://httpbin.org/post";
 
     // Send request
     let mut request = client.post(url, &headers)?;
@@ -165,7 +168,11 @@ async fn run_async() -> Result<(), anyhow::Error> {
     let mut button = PinDriver::input(peripherals.pins.gpio14)?;
     button.set_pull(Pull::Up)?;
 
-    let mut client = HttpClient::wrap(EspHttpConnection::new(&Default::default())?);
+    let config = &esp_idf_svc::http::client::Configuration {
+        crt_bundle_attach: Some(esp_idf_svc::sys::esp_crt_bundle_attach),
+        ..Default::default()
+    };
+    let mut client = HttpClient::wrap(EspHttpConnection::new(&config)?);
 
     loop {
         // Asynchronously wait for GPIO events, allowing other tasks
