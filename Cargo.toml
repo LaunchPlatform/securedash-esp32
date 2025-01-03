@@ -26,5 +26,12 @@ experimental = ["esp-idf-svc/experimental"]
 log = "0.4"
 esp-idf-svc = { version = "0.50", features = ["critical-section", "embassy-time-driver", "embassy-sync"] }
 
+[[package.metadata.esp-idf-sys.extra_components]]
+remote_component = { name = "espressif/esp_tinyusb", version = "1.5.0" }
+
 [build-dependencies]
 embuild = "0.33"
+
+[patch.crates-io]
+embuild = { git = "https://github.com/esp-rs/embuild" }
+esp-idf-sys = { git = "https://github.com/esp-rs/esp-idf-sys" }
