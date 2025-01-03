@@ -1,3 +1,5 @@
+mod usb;
+
 use embedded_svc::{
     http::{client::Client as HttpClient, Method},
     io::Write,
@@ -26,21 +28,7 @@ use std::{fs, thread};
 const SSID: &str = env!("WIFI_SSID");
 const PASSWORD: &str = env!("WIFI_PASS");
 
-unsafe extern "C" fn storage_mount_changed_cb(event: *mut tinyusb_msc_event_t) {
-    log::info!(
-        "Mount changed: {}, {}",
-        (*event).type_,
-        (*event).__bindgen_anon_1.mount_changed_data.is_mounted
-    );
-}
 
-unsafe extern "C" fn storage_premount_changed_cb(event: *mut tinyusb_msc_event_t) {
-    log::info!(
-        "Pre-Mount changed: {}, {}",
-        (*event).type_,
-        (*event).__bindgen_anon_1.mount_changed_data.is_mounted
-    );
-}
 
 async fn connect_wifi(modem: modem::Modem) -> anyhow::Result<AsyncWifi<EspWifi<'static>>> {
     let sys_loop = EspSystemEventLoop::take()?;
@@ -126,44 +114,6 @@ async fn run_async() -> Result<(), anyhow::Error> {
         wifi.wifi().sta_netif().get_ip_info()?
     );
 
-    let mut handle = wl_handle_t::default();
-    let base_path = CString::new("/disk").unwrap();
-    let partition_label = CString::new("storage").unwrap();
-
-    let data_partition = unsafe {
-        esp_partition_find_first(
-            esp_partition_type_t_ESP_PARTITION_TYPE_DATA,
-            esp_partition_subtype_t_ESP_PARTITION_SUBTYPE_DATA_FAT,
-            partition_label.as_ptr(),
-        )
-    };
-
-    esp!(unsafe { wl_mount(data_partition, &mut handle) }).expect("failed to mount wl");
-
-    let config_spi = tinyusb_msc_spiflash_config_t {
-        wl_handle: handle,
-        callback_mount_changed: Some(storage_mount_changed_cb), /* First way to register the callback. This is while initializing the storage. */
-        callback_premount_changed: Some(storage_premount_changed_cb),
-        mount_config: esp_vfs_fat_mount_config_t {
-            format_if_mount_failed: false,
-            max_files: 5,
-            allocation_unit_size: 0,
-            disk_status_check_enable: false,
-            use_one_fat: false,
-        },
-    };
-    esp!(unsafe { tinyusb_msc_storage_init_spiflash(&config_spi) })
-        .expect("tinyusb_msc_storage_init_spiflash failed");
-
-    // esp!(unsafe { tinyusb_msc_storage_mount(base_path.as_ptr()) })
-    //     .expect("failed to usb mount storage;");
-
-    let tusb_cfg = tinyusb_config_t::default();
-    unsafe {
-        esp!(tinyusb_driver_install(&tusb_cfg)).expect("Failed to install driver");
-    }
-
-    log::info!("installed!");
 
     let mut button = PinDriver::input(peripherals.pins.gpio14)?;
     button.set_pull(Pull::Up)?;

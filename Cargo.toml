@@ -29,7 +29,7 @@ embedded-svc = "0.28.1"
 anyhow = "1.0.95"
 
 [[package.metadata.esp-idf-sys.extra_components]]
-remote_component = { name = "espressif/esp_tinyusb", version = "1.5.0" }
+remote_component = { name = "espressif/esp_tinyusb", version = "96cbb5b308f92d2493a0c714f097dcfc51add807", git = "https://github.com/LaunchPlatform/esp-usb.git", path = "device/esp_tinyusb" }
 
 [build-dependencies]
 embuild = "0.33"
