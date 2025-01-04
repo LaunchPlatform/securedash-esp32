@@ -11,7 +11,7 @@ use std::ffi::CString;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Default)]
-struct MSCDevice {
+pub struct MSCDevice {
     pub base_path: String,
     pub partition_label: String,
     wl_handle: wl_handle_t,

@@ -1,5 +1,6 @@
 mod usb;
 
+use crate::usb::msc_device::MSCDevice;
 use embedded_svc::{
     http::{client::Client as HttpClient, Method},
     io::Write,
@@ -27,8 +28,6 @@ use std::{fs, thread};
 
 const SSID: &str = env!("WIFI_SSID");
 const PASSWORD: &str = env!("WIFI_PASS");
-
-
 
 async fn connect_wifi(modem: modem::Modem) -> anyhow::Result<AsyncWifi<EspWifi<'static>>> {
     let sys_loop = EspSystemEventLoop::take()?;
@@ -114,6 +113,12 @@ async fn run_async() -> Result<(), anyhow::Error> {
         wifi.wifi().sta_netif().get_ip_info()?
     );
 
+    let mut msc_device = MSCDevice {
+        base_path: String::from("/disk"),
+        partition_label: String::from("/storage"),
+        ..MSCDevice::default()
+    };
+    msc_device.install()?;
 
     let mut button = PinDriver::input(peripherals.pins.gpio14)?;
     button.set_pull(Pull::Up)?;
@@ -130,13 +135,9 @@ async fn run_async() -> Result<(), anyhow::Error> {
         button.wait_for_low().await?;
         log::info!("Button pressed!");
 
-        esp!(unsafe { tinyusb_msc_storage_mount(base_path.as_ptr()) })?;
-
         let contents = fs::read_to_string("/disk/myfile.txt").unwrap_or(String::from("N/A"));
         log::info!("File content: {}", contents);
         post_chunked_request(&mut client, contents.as_bytes());
-
-        esp!(unsafe { tinyusb_msc_storage_unmount() })?;
 
         button.wait_for_high().await?;
         log::info!("Button released!");
