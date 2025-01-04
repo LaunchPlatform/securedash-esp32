@@ -2,10 +2,13 @@ use anyhow::{anyhow, bail, Context};
 use esp_idf_svc::sys::{
     esp, esp_partition_find_first, esp_partition_subtype_t_ESP_PARTITION_SUBTYPE_DATA_FAT,
     esp_partition_type_t_ESP_PARTITION_TYPE_DATA, esp_vfs_fat_mount_config_t, tinyusb_config_t,
-    tinyusb_driver_install, tinyusb_msc_event_t, tinyusb_msc_spiflash_config_t,
+    tinyusb_driver_install, tinyusb_msc_event_t, tinyusb_msc_event_type_t,
+    tinyusb_msc_event_type_t_TINYUSB_MSC_EVENT_MOUNT_CHANGED,
+    tinyusb_msc_event_type_t_TINYUSB_MSC_EVENT_PREMOUNT_CHANGED, tinyusb_msc_spiflash_config_t,
     tinyusb_msc_storage_init_spiflash, tinyusb_msc_storage_mount, wl_handle_t, wl_mount,
 };
 use std::ffi::CString;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Default)]
 struct MSCDevice {
@@ -16,10 +19,18 @@ struct MSCDevice {
     partition_label_c_str: CString,
 }
 
+fn msc_event_type_to_str(event_type: tinyusb_msc_event_type_t) -> String {
+    String::from(match event_type {
+        tinyusb_msc_event_type_t_TINYUSB_MSC_EVENT_MOUNT_CHANGED => "MOUNT_CHANGED",
+        tinyusb_msc_event_type_t_TINYUSB_MSC_EVENT_PREMOUNT_CHANGED => "PREMOUNT_CHANGED",
+        _ => "Unknown",
+    })
+}
+
 unsafe extern "C" fn storage_mount_changed_cb(event: *mut tinyusb_msc_event_t) {
     log::info!(
         "Mount changed event, type={}, is_mounted={}",
-        (*event).type_,
+        msc_event_type_to_str((*event).type_),
         (*event).__bindgen_anon_1.mount_changed_data.is_mounted
     );
 }
