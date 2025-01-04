@@ -87,7 +87,7 @@ impl MSCDevice {
             .with_context(|| format!("Failed to mount storage at {}", self.base_path))?;
 
         let tusb_cfg = tinyusb_config_t::default();
-        esp!(unsafe { (tinyusb_driver_install(&tusb_cfg)) })
+        esp!(unsafe { tinyusb_driver_install(&tusb_cfg) })
             .with_context(|| "Failed to install TinyUSB driver")?;
 
         log::info!("TinyUSB driver installed.");

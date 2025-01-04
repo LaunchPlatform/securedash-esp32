@@ -7,22 +7,14 @@ use embedded_svc::{
     utils::io,
 };
 use esp_idf_svc::eventloop::EspSystemEventLoop;
-use esp_idf_svc::hal::gpio::{Input, InputPin, InterruptType, PinDriver, Pull};
+use esp_idf_svc::hal::gpio::{PinDriver, Pull};
 use esp_idf_svc::hal::modem;
 use esp_idf_svc::hal::prelude::Peripherals;
 use esp_idf_svc::hal::task::block_on;
 use esp_idf_svc::http::client::EspHttpConnection;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
-use esp_idf_svc::sys::{
-    esp, esp_partition_find_first, esp_partition_subtype_t_ESP_PARTITION_SUBTYPE_DATA_FAT,
-    esp_partition_type_t_ESP_PARTITION_TYPE_DATA, esp_vfs_fat_mount_config_t, tinyusb_config_t,
-    tinyusb_driver_install, tinyusb_msc_event_t, tinyusb_msc_spiflash_config_t,
-    tinyusb_msc_storage_init_spiflash, tinyusb_msc_storage_mount, tinyusb_msc_storage_unmount,
-    wl_handle_t, wl_mount,
-};
 use esp_idf_svc::timer::EspTaskTimerService;
 use esp_idf_svc::wifi::{AsyncWifi, AuthMethod, ClientConfiguration, Configuration, EspWifi};
-use std::ffi::CString;
 use std::time::Duration;
 use std::{fs, thread};
 
