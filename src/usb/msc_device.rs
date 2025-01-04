@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Context};
+use anyhow::{bail, Context};
 use esp_idf_svc::sys::{
     esp, esp_partition_find_first, esp_partition_subtype_t_ESP_PARTITION_SUBTYPE_DATA_FAT,
     esp_partition_type_t_ESP_PARTITION_TYPE_DATA, esp_vfs_fat_mount_config_t, tinyusb_config_t,
@@ -8,12 +8,11 @@ use esp_idf_svc::sys::{
     tinyusb_msc_storage_init_spiflash, tinyusb_msc_storage_mount, wl_handle_t, wl_mount,
 };
 use std::ffi::CString;
-use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Default)]
 pub struct MSCDevice {
-    pub base_path: String,
     pub partition_label: String,
+    pub base_path: String,
     wl_handle: wl_handle_t,
     base_path_c_str: CString,
     partition_label_c_str: CString,
@@ -36,9 +35,17 @@ unsafe extern "C" fn storage_mount_changed_cb(event: *mut tinyusb_msc_event_t) {
 }
 
 impl MSCDevice {
+    pub fn new(partition_label: &str, base_path: &str) -> Self {
+        Self {
+            base_path: base_path.to_string(),
+            partition_label: partition_label.to_string(),
+            ..Default::default()
+        }
+    }
+
     pub fn install(&mut self) -> anyhow::Result<()> {
-        self.partition_label_c_str = CString::new(&self.partition_label).unwrap();
-        self.base_path_c_str = CString::new(&self.base_path).unwrap();
+        self.partition_label_c_str = CString::new(self.partition_label.as_bytes()).unwrap();
+        self.base_path_c_str = CString::new(self.base_path.as_bytes()).unwrap();
 
         let data_partition = unsafe {
             esp_partition_find_first(

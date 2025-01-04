@@ -113,11 +113,7 @@ async fn run_async() -> Result<(), anyhow::Error> {
         wifi.wifi().sta_netif().get_ip_info()?
     );
 
-    let mut msc_device = MSCDevice {
-        base_path: String::from("/disk"),
-        partition_label: String::from("/storage"),
-        ..MSCDevice::default()
-    };
+    let mut msc_device = MSCDevice::new("storage", "/disk");
     msc_device.install()?;
 
     let mut button = PinDriver::input(peripherals.pins.gpio14)?;
