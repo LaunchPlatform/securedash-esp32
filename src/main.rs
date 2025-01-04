@@ -1,60 +1,19 @@
 mod usb;
+mod wifi;
 
 use crate::usb::msc_device::MSCDevice;
-use embedded_svc::{
-    http::{client::Client as HttpClient, Method},
-    io::Write,
-    utils::io,
-};
-use esp_idf_svc::eventloop::EspSystemEventLoop;
+use crate::wifi::session::WifiSession;
+use embedded_svc::wifi::AuthMethod;
+use embedded_svc::{http::client::Client as HttpClient, io::Write, utils::io};
 use esp_idf_svc::hal::gpio::{PinDriver, Pull};
-use esp_idf_svc::hal::modem;
 use esp_idf_svc::hal::prelude::Peripherals;
 use esp_idf_svc::hal::task::block_on;
 use esp_idf_svc::http::client::EspHttpConnection;
-use esp_idf_svc::nvs::EspDefaultNvsPartition;
-use esp_idf_svc::timer::EspTaskTimerService;
-use esp_idf_svc::wifi::{AsyncWifi, AuthMethod, ClientConfiguration, Configuration, EspWifi};
 use std::time::Duration;
 use std::{fs, thread};
 
 const SSID: &str = env!("WIFI_SSID");
 const PASSWORD: &str = env!("WIFI_PASS");
-
-async fn connect_wifi(modem: modem::Modem) -> anyhow::Result<AsyncWifi<EspWifi<'static>>> {
-    let sys_loop = EspSystemEventLoop::take()?;
-    let timer_service = EspTaskTimerService::new()?;
-    let nvs = EspDefaultNvsPartition::take()?;
-
-    let mut wifi = AsyncWifi::wrap(
-        EspWifi::new(modem, sys_loop.clone(), Some(nvs))?,
-        sys_loop,
-        timer_service,
-    )?;
-
-    let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
-        ssid: SSID.try_into().unwrap(),
-        bssid: None,
-        auth_method: AuthMethod::WPA2Personal,
-        password: PASSWORD.try_into().unwrap(),
-        channel: None,
-        scan_method: Default::default(),
-        pmf_cfg: Default::default(),
-    });
-
-    wifi.set_configuration(&wifi_configuration)?;
-
-    wifi.start().await?;
-    log::info!("Wifi started");
-
-    wifi.connect().await?;
-    log::info!("Wifi connected");
-
-    wifi.wait_netif_up().await?;
-    log::info!("Wifi netif up");
-
-    Ok(wifi)
-}
 
 fn post_chunked_request(
     client: &mut HttpClient<EspHttpConnection>,
@@ -95,15 +54,16 @@ fn post_chunked_request(
 }
 
 async fn run_async() -> Result<(), anyhow::Error> {
-    log::info!("Hello, world!");
+    log::info!(
+        "Start {} - {}",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION")
+    );
 
     let peripherals = Peripherals::take().expect("@@@ Take Peripherals failed");
-    let wifi = connect_wifi(peripherals.modem).await?;
-
-    log::info!(
-        "Connected wifi: {:#?}",
-        wifi.wifi().sta_netif().get_ip_info()?
-    );
+    let mut wifi = WifiSession::new(SSID, PASSWORD, AuthMethod::WPA2Personal, peripherals.modem)?;
+    wifi.connect().await?;
+    log::info!("Connected wifi: {:#?}", wifi.get_ip_info());
 
     let mut msc_device = MSCDevice::new("storage", "/disk");
     msc_device.install()?;
@@ -125,7 +85,7 @@ async fn run_async() -> Result<(), anyhow::Error> {
 
         let contents = fs::read_to_string("/disk/myfile.txt").unwrap_or(String::from("N/A"));
         log::info!("File content: {}", contents);
-        post_chunked_request(&mut client, contents.as_bytes());
+        post_chunked_request(&mut client, contents.as_bytes())?;
 
         button.wait_for_high().await?;
         log::info!("Button released!");
