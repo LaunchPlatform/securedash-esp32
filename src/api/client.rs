@@ -1,4 +1,7 @@
 use core::time;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::channel::{Channel, Sender};
+use esp_idf_svc::hal::task::block_on;
 use esp_idf_svc::io::EspIOError;
 use esp_idf_svc::ws::client::{
     EspWebSocketClient, EspWebSocketClientConfig, WebSocketClosingReason, WebSocketEvent,
@@ -6,6 +9,8 @@ use esp_idf_svc::ws::client::{
 };
 use std::cmp::PartialEq;
 use std::sync::{Arc, Mutex, RwLock};
+
+const STATE_CHANNEL_QUEUE_SIZE: usize = 32;
 
 #[derive(Debug, PartialEq)]
 pub enum APIError {
@@ -19,7 +24,7 @@ pub enum DesiredState {
     Disconnected,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 enum ConnectionState {
     Connecting,
     BeforeConnect,
@@ -30,10 +35,18 @@ enum ConnectionState {
     Closed,
     Disconnected,
 }
+#[derive(Debug, PartialEq)]
+pub enum APIEvent {
+    StateChange {
+        old_state: ConnectionState,
+        new_state: ConnectionState,
+    },
+}
 
-struct APIState {
+struct APIState<'a> {
     desired_state: DesiredState,
     connection_state: ConnectionState,
+    sender: Sender<'a, CriticalSectionRawMutex, APIEvent, STATE_CHANNEL_QUEUE_SIZE>,
 }
 
 pub struct APIClient<'a> {
@@ -41,11 +54,12 @@ pub struct APIClient<'a> {
     timeout: time::Duration,
     config: EspWebSocketClientConfig<'a>,
     ws_client: Option<EspWebSocketClient<'a>>,
-    state: Arc<RwLock<APIState>>,
+    state: Arc<RwLock<APIState<'a>>>,
 }
 
 impl<'a> APIClient<'a> {
     pub fn new(endpoint: &str, timeout: time::Duration) -> Self {
+        let channel = Channel::<CriticalSectionRawMutex, APIEvent, STATE_CHANNEL_QUEUE_SIZE>::new();
         Self {
             endpoint: endpoint.to_string(),
             timeout,
@@ -57,12 +71,17 @@ impl<'a> APIClient<'a> {
             state: Arc::new(RwLock::new(APIState {
                 desired_state: DesiredState::Disconnected,
                 connection_state: ConnectionState::Disconnected,
+                sender: channel.sender(),
             })),
         }
     }
 
     pub fn get_desired_state(&self) -> DesiredState {
         self.state.read().unwrap().desired_state
+    }
+
+    pub fn get_connection_state(&self) -> ConnectionState {
+        self.state.read().unwrap().connection_state
     }
 
     pub fn connect(&mut self) -> Result<(), APIError> {
@@ -98,28 +117,40 @@ impl<'a> APIClient<'a> {
 }
 
 impl APIState {
+    fn transit_state(&mut self, new_state: ConnectionState) {
+        let old_state = self.connection_state;
+        self.connection_state = new_state;
+        block_on(async || {
+            self.sender
+                .send(APIEvent::StateChange {
+                    old_state,
+                    new_state,
+                }).await;
+        });
+    }
+
     fn handle_event(&mut self, event: &Result<WebSocketEvent, EspIOError>) {
         if let Ok(event) = event {
             match event.event_type {
                 WebSocketEventType::BeforeConnect => {
                     log::info!("Websocket before connect");
-                    self.connection_state = ConnectionState::BeforeConnect;
+                    self.transit_state(ConnectionState::BeforeConnect);
                 }
                 WebSocketEventType::Connected => {
                     log::info!("Websocket connected");
-                    self.connection_state = ConnectionState::Connected;
+                    self.transit_state(ConnectionState::Connected);
                 }
                 WebSocketEventType::Disconnected => {
                     log::info!("Websocket disconnected");
-                    self.connection_state = ConnectionState::Disconnected;
+                    self.transit_state(ConnectionState::Disconnected);
                 }
                 WebSocketEventType::Close(reason) => {
                     log::info!("Websocket close, reason: {reason:?}");
-                    self.connection_state = ConnectionState::Close { reason };
+                    self.transit_state(ConnectionState::Close { reason });
                 }
                 WebSocketEventType::Closed => {
                     log::info!("Websocket closed");
-                    self.connection_state = ConnectionState::Closed;
+                    self.transit_state(ConnectionState::Closed);
                 }
                 WebSocketEventType::Text(text) => {
                     log::info!("Websocket recv, text: {text}");

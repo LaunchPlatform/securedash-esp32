@@ -1154,6 +1154,7 @@ name = "securedash"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "embassy-sync",
  "embedded-svc",
  "embuild",
  "esp-idf-svc",
