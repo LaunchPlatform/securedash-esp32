@@ -28,17 +28,17 @@ enum ConnectionState {
     Disconnected,
 }
 
-struct APIState<'a> {
+struct APIState {
     desired_state: DesiredState,
     connection_state: ConnectionState,
-    ws_client: Option<EspWebSocketClient<'a>>,
 }
 
 pub struct APIClient<'a> {
     endpoint: String,
     timeout: time::Duration,
     config: EspWebSocketClientConfig<'a>,
-    state: Arc<RwLock<APIState<'a>>>,
+    ws_client: Mutex<Option<EspWebSocketClient<'a>>>,
+    state: Arc<RwLock<APIState>>,
 }
 
 
@@ -51,10 +51,10 @@ impl<'a> APIClient<'a> {
                 // server_cert: Some(X509::pem_until_nul(SERVER_ROOT_CERT)),
                 ..Default::default()
             },
+            ws_client: Mutex::new(None),
             state: Arc::new(RwLock::new(APIState {
                 desired_state: DesiredState::Disconnected,
                 connection_state: ConnectionState::Disconnected,
-                ws_client: None,
             })),
         }
     }
@@ -72,7 +72,8 @@ impl<'a> APIClient<'a> {
         }
         state.desired_state = DesiredState::Connected;
         let weak_state = Arc::downgrade(&self.state);
-        state.ws_client = Some(EspWebSocketClient::new(&self.endpoint, &self.config, self.timeout, move |event| {
+        let ws_client_lock = self.ws_client.lock().unwrap();
+        *ws_client_lock  = Some(EspWebSocketClient::new(&self.endpoint, &self.config, self.timeout, move |event| {
                 let state = weak_state.upgrade();
                 if let Some(state) = state {
                     state.write().unwrap().handle_event(event);
@@ -85,13 +86,13 @@ impl<'a> APIClient<'a> {
     pub fn disconnect(&mut self) {
         let mut write_lock = self.state.write();
         let state = write_lock.as_mut().unwrap();
-        state.ws_client = None;
+        *self.ws_client.lock().unwrap() = None;
         state.desired_state = DesiredState::Disconnected;
         log::info!("Change desired state to Disconnected")
     }
 }
 
-impl<'a> APIState<'a> {
+impl APIState {
     fn handle_event(&mut self, event: &Result<WebSocketEvent, EspIOError>) {
         if let Ok(event) = event {
             match event.event_type {
