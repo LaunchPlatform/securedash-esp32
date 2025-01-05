@@ -4,6 +4,7 @@ use esp_idf_svc::ws::client::{
     EspWebSocketClient, EspWebSocketClientConfig, WebSocketEvent, WebSocketEventType,
 };
 use std::cmp::PartialEq;
+use std::ops::Deref;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -30,13 +31,13 @@ enum ConnectionState {
 struct APIState<'a> {
     desired_state: DesiredState,
     connection_state: ConnectionState,
-    ws_config: Option<EspWebSocketClientConfig<'a>>,
     ws_client: Option<EspWebSocketClient<'a>>,
 }
 
 pub struct APIClient<'a> {
     endpoint: String,
     timeout: time::Duration,
+    config: EspWebSocketClientConfig<'a>,
     state: Arc<RwLock<APIState<'a>>>,
 }
 
@@ -46,10 +47,13 @@ impl<'a> APIClient<'a> {
         Self {
             endpoint,
             timeout,
+            config: EspWebSocketClientConfig {
+                // server_cert: Some(X509::pem_until_nul(SERVER_ROOT_CERT)),
+                ..Default::default()
+            },
             state: Arc::new(RwLock::new(APIState {
                 desired_state: DesiredState::Disconnected,
                 connection_state: ConnectionState::Disconnected,
-                ws_config: None,
                 ws_client: None,
             })),
         }
@@ -67,17 +71,13 @@ impl<'a> APIClient<'a> {
             return Err(APIError::AlreadyConnected);
         }
         state.desired_state = DesiredState::Connected;
-        let config = EspWebSocketClientConfig {
-            // server_cert: Some(X509::pem_until_nul(SERVER_ROOT_CERT)),
-            ..Default::default()
-        };
         let weak_state = Arc::downgrade(&self.state);
-        state.ws_client = Some(EspWebSocketClient::new(&self.endpoint, &config, self.timeout, move |event| {
-            let state = weak_state.upgrade();
-            if let Some(state) = state {
-                state.write().unwrap().handle_event(event);
-            }
-        }).map_err(|error| {APIError::EspIOError {error}})?);
+        state.ws_client = Some(EspWebSocketClient::new(&self.endpoint, &self.config, self.timeout, move |event| {
+                let state = weak_state.upgrade();
+                if let Some(state) = state {
+                    state.write().unwrap().handle_event(event);
+                }
+            }).map_err(|error| {APIError::EspIOError {error}})?);
         log::info!("Change desired state to Connected");
         Ok(())
     }
@@ -85,7 +85,6 @@ impl<'a> APIClient<'a> {
     pub fn disconnect(&mut self) {
         let mut write_lock = self.state.write();
         let state = write_lock.as_mut().unwrap();
-        state.ws_config = None;
         state.ws_client = None;
         state.desired_state = DesiredState::Disconnected;
         log::info!("Change desired state to Disconnected")
@@ -98,18 +97,22 @@ impl<'a> APIState<'a> {
             match event.event_type {
                 WebSocketEventType::BeforeConnect => {
                     log::info!("Websocket before connect");
+                    self.connection_state = ConnectionState::BeforeConnect;
                 }
                 WebSocketEventType::Connected => {
                     log::info!("Websocket connected");
+                    self.connection_state = ConnectionState::Connected;
                 }
                 WebSocketEventType::Disconnected => {
                     log::info!("Websocket disconnected");
                 }
                 WebSocketEventType::Close(reason) => {
                     log::info!("Websocket close, reason: {reason:?}");
+                    self.connection_state = ConnectionState::Disconnected;
                 }
                 WebSocketEventType::Closed => {
                     log::info!("Websocket closed");
+                    self.connection_state = ConnectionState::Disconnected;
                 }
                 WebSocketEventType::Text(text) => {
                     log::info!("Websocket recv, text: {text}");
