@@ -35,7 +35,7 @@ pub struct APIClient<'a> {
     endpoint: String,
     timeout: time::Duration,
     config: EspWebSocketClientConfig<'a>,
-    ws_client: Mutex<Option<EspWebSocketClient<'a>>>,
+    ws_client: Option<EspWebSocketClient<'a>>,
     state: Arc<RwLock<APIState>>,
 }
 
@@ -48,7 +48,7 @@ impl<'a> APIClient<'a> {
                 // server_cert: Some(X509::pem_until_nul(SERVER_ROOT_CERT)),
                 ..Default::default()
             },
-            ws_client: Mutex::new(None),
+            ws_client: None,
             state: Arc::new(RwLock::new(APIState {
                 desired_state: DesiredState::Disconnected,
                 connection_state: ConnectionState::Disconnected,
@@ -70,7 +70,7 @@ impl<'a> APIClient<'a> {
         }
         state.desired_state = DesiredState::Connected;
         let weak_state = Arc::downgrade(&self.state);
-        *self.ws_client.lock().unwrap() = Some(
+        self.ws_client = Some(
             EspWebSocketClient::new(&self.endpoint, &self.config, self.timeout, move |event| {
                 let state = weak_state.upgrade();
                 if let Some(state) = state {
@@ -86,7 +86,7 @@ impl<'a> APIClient<'a> {
     pub fn disconnect(&mut self) {
         let mut write_lock = self.state.write();
         let state = write_lock.as_mut().unwrap();
-        *self.ws_client.lock().unwrap() = None;
+        self.ws_client = None;
         state.desired_state = DesiredState::Disconnected;
         log::info!("Change desired state to Disconnected")
     }
