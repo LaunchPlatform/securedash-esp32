@@ -54,7 +54,7 @@ pub struct ChannelReceiver {
 }
 
 impl ChannelReceiver {
-    pub fn receiver(
+    pub fn unwrap(
         &self,
     ) -> Receiver<CriticalSectionRawMutex, APIEvent, STATE_CHANNEL_QUEUE_SIZE> {
         self.channel.receiver()
@@ -139,7 +139,7 @@ impl<'a> APIClient<'a> {
 }
 
 impl APIState {
-    fn transit_state(&mut self, new_state: ConnectionState) {
+    fn set_state(&mut self, new_state: ConnectionState) {
         let old_state = self.connection_state;
         self.connection_state = new_state;
         let channel = self.channel.clone();
@@ -159,23 +159,23 @@ impl APIState {
             match event.event_type {
                 WebSocketEventType::BeforeConnect => {
                     log::info!("Websocket before connect");
-                    self.transit_state(ConnectionState::BeforeConnect);
+                    self.set_state(ConnectionState::BeforeConnect);
                 }
                 WebSocketEventType::Connected => {
                     log::info!("Websocket connected");
-                    self.transit_state(ConnectionState::Connected);
+                    self.set_state(ConnectionState::Connected);
                 }
                 WebSocketEventType::Disconnected => {
                     log::info!("Websocket disconnected");
-                    self.transit_state(ConnectionState::Disconnected);
+                    self.set_state(ConnectionState::Disconnected);
                 }
                 WebSocketEventType::Close(reason) => {
                     log::info!("Websocket close, reason: {reason:?}");
-                    self.transit_state(ConnectionState::Close { reason });
+                    self.set_state(ConnectionState::Close { reason });
                 }
                 WebSocketEventType::Closed => {
                     log::info!("Websocket closed");
-                    self.transit_state(ConnectionState::Closed);
+                    self.set_state(ConnectionState::Closed);
                 }
                 WebSocketEventType::Text(text) => {
                     log::info!("Websocket recv, text: {text}");

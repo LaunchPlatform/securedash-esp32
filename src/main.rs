@@ -23,7 +23,7 @@ const API_ENDPOINT: &str = env!("API_ENDPOINT");
 async fn read_events(channel_receiver: ChannelReceiver) {
     loop {
         log::info!("Reading events ...");
-        let data = channel_receiver.receiver().receive().await;
+        let data = channel_receiver.unwrap().receive().await;
         log::info!("!!! RECEIVED {data:#?}")
     }
 }
