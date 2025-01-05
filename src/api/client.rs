@@ -1,6 +1,6 @@
 use core::time;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::channel::{Channel, Sender};
+use embassy_sync::channel::{Channel, Receiver, Sender};
 use esp_idf_svc::hal::task::block_on;
 use esp_idf_svc::io::EspIOError;
 use esp_idf_svc::ws::client::{
@@ -43,10 +43,22 @@ pub enum APIEvent {
     },
 }
 
-struct APIState<'a> {
+struct APIState {
     desired_state: DesiredState,
     connection_state: ConnectionState,
-    sender: Sender<'a, CriticalSectionRawMutex, APIEvent, STATE_CHANNEL_QUEUE_SIZE>,
+    channel: Arc<Channel<CriticalSectionRawMutex, APIEvent, STATE_CHANNEL_QUEUE_SIZE>>,
+}
+
+pub struct ChannelReceiver {
+    channel: Arc<Channel<CriticalSectionRawMutex, APIEvent, STATE_CHANNEL_QUEUE_SIZE>>,
+}
+
+impl ChannelReceiver {
+    pub fn receiver(
+        &self,
+    ) -> Receiver<CriticalSectionRawMutex, APIEvent, STATE_CHANNEL_QUEUE_SIZE> {
+        self.channel.receiver()
+    }
 }
 
 pub struct APIClient<'a> {
@@ -54,12 +66,16 @@ pub struct APIClient<'a> {
     timeout: time::Duration,
     config: EspWebSocketClientConfig<'a>,
     ws_client: Option<EspWebSocketClient<'a>>,
-    state: Arc<RwLock<APIState<'a>>>,
+    state: Arc<RwLock<APIState>>,
 }
 
 impl<'a> APIClient<'a> {
     pub fn new(endpoint: &str, timeout: time::Duration) -> Self {
-        let channel = Channel::<CriticalSectionRawMutex, APIEvent, STATE_CHANNEL_QUEUE_SIZE>::new();
+        let channel = Arc::new(Channel::<
+            CriticalSectionRawMutex,
+            APIEvent,
+            STATE_CHANNEL_QUEUE_SIZE,
+        >::new());
         Self {
             endpoint: endpoint.to_string(),
             timeout,
@@ -71,7 +87,7 @@ impl<'a> APIClient<'a> {
             state: Arc::new(RwLock::new(APIState {
                 desired_state: DesiredState::Disconnected,
                 connection_state: ConnectionState::Disconnected,
-                sender: channel.sender(),
+                channel,
             })),
         }
     }
@@ -114,18 +130,27 @@ impl<'a> APIClient<'a> {
         state.desired_state = DesiredState::Disconnected;
         log::info!("Change desired state to Disconnected")
     }
+
+    pub fn acquire_receiver(&mut self) -> ChannelReceiver {
+        ChannelReceiver {
+            channel: self.state.read().unwrap().channel.clone(),
+        }
+    }
 }
 
 impl APIState {
     fn transit_state(&mut self, new_state: ConnectionState) {
         let old_state = self.connection_state;
         self.connection_state = new_state;
-        block_on(async || {
-            self.sender
+        let channel = self.channel.clone();
+        block_on(async {
+            channel
+                .sender()
                 .send(APIEvent::StateChange {
                     old_state,
                     new_state,
-                }).await;
+                })
+                .await;
         });
     }
 
