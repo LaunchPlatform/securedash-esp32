@@ -40,9 +40,9 @@ pub struct APIClient<'a> {
 }
 
 impl<'a> APIClient<'a> {
-    pub fn new(endpoint: String, timeout: time::Duration) -> Self {
+    pub fn new(endpoint: &str, timeout: time::Duration) -> Self {
         Self {
-            endpoint,
+            endpoint: endpoint.to_string(),
             timeout,
             config: EspWebSocketClientConfig {
                 // server_cert: Some(X509::pem_until_nul(SERVER_ROOT_CERT)),
