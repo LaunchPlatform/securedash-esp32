@@ -2,7 +2,7 @@ mod api;
 mod usb;
 mod wifi;
 
-use crate::api::websocket_session::{WebSocketSession, SessionEvent, ChannelReceiver, ConnectionState};
+use crate::api::websocket::{WebSocketSession, SessionEvent, ChannelReceiver, ConnectionState};
 use crate::usb::msc_device::MSCDevice;
 use crate::wifi::session::WifiSession;
 use embedded_svc::wifi::AuthMethod;
