@@ -1,8 +1,10 @@
 use core::time;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::{Channel, Receiver, Sender};
+use embedded_svc::ws::FrameType;
 use esp_idf_svc::hal::task::block_on;
 use esp_idf_svc::io::EspIOError;
+use esp_idf_svc::sys::EspError;
 use esp_idf_svc::ws::client::{
     EspWebSocketClient, EspWebSocketClientConfig, WebSocketClosingReason, WebSocketEvent,
     WebSocketEventType,
@@ -15,6 +17,8 @@ const STATE_CHANNEL_QUEUE_SIZE: usize = 32;
 #[derive(Debug, PartialEq)]
 pub enum APIError {
     AlreadyConnected,
+    NotConnectedYet,
+    EspError { error: EspError },
     EspIOError { error: EspIOError },
 }
 
@@ -54,9 +58,7 @@ pub struct ChannelReceiver {
 }
 
 impl ChannelReceiver {
-    pub fn unwrap(
-        &self,
-    ) -> Receiver<CriticalSectionRawMutex, APIEvent, STATE_CHANNEL_QUEUE_SIZE> {
+    pub fn unwrap(&self) -> Receiver<CriticalSectionRawMutex, APIEvent, STATE_CHANNEL_QUEUE_SIZE> {
         self.channel.receiver()
     }
 }
@@ -135,6 +137,18 @@ impl<'a> APIClient<'a> {
         ChannelReceiver {
             channel: self.state.read().unwrap().channel.clone(),
         }
+    }
+
+    pub fn send(&mut self, frame_type: FrameType, frame_data: &[u8]) -> Result<(), APIError> {
+        let mut write_lock = self.state.write();
+        let state = write_lock.as_mut().unwrap();
+        if state.connection_state != ConnectionState::Connected {
+            return Err(APIError::NotConnectedYet);
+        }
+        let ws_client = self.ws_client.as_mut().unwrap();
+        ws_client
+            .send(frame_type, frame_data)
+            .map_err(|error| APIError::EspError { error })
     }
 }
 
