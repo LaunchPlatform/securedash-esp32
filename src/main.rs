@@ -16,6 +16,7 @@ use std::{fs, thread, time};
 
 const SSID: &str = env!("WIFI_SSID");
 const PASSWORD: &str = env!("WIFI_PASS");
+const API_ENDPOINT: &str = env!("API_ENDPOINT");
 
 
 async fn run_async() -> Result<(), anyhow::Error> {
@@ -40,7 +41,7 @@ async fn run_async() -> Result<(), anyhow::Error> {
         crt_bundle_attach: Some(esp_idf_svc::sys::esp_crt_bundle_attach),
         ..Default::default()
     };
-    let mut client = APIClient::new("", time::Duration::from_secs(30));
+    let mut client = APIClient::new(API_ENDPOINT, time::Duration::from_secs(30));
 
     loop {
         // Asynchronously wait for GPIO events, allowing other tasks
