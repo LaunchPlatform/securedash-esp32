@@ -2,7 +2,7 @@ mod api;
 mod usb;
 mod wifi;
 
-use crate::api::client::{APIClient, APIEvent, ChannelReceiver, ConnectionState};
+use crate::api::websocket_session::{WebSocketSession, SessionEvent, ChannelReceiver, ConnectionState};
 use crate::usb::msc_device::MSCDevice;
 use crate::wifi::session::WifiSession;
 use embedded_svc::wifi::AuthMethod;
@@ -21,14 +21,14 @@ const SSID: &str = env!("WIFI_SSID");
 const PASSWORD: &str = env!("WIFI_PASS");
 const API_ENDPOINT: &str = env!("API_ENDPOINT");
 
-async fn read_events(mut client: APIClient<'_>) {
+async fn read_events(mut client: WebSocketSession<'_>) {
     client.connect();
     loop {
         log::info!("Reading events ...");
         let event = client.acquire_receiver().unwrap().receive().await;
         log::info!("!!! RECEIVED {event:#?}");
         match event {
-            APIEvent::StateChange { new_state: ConnectionState::Connected, .. } => {
+            SessionEvent::StateChange { new_state: ConnectionState::Connected, .. } => {
                 client.send(FrameType::Text(false), "hello there".as_bytes()).unwrap();
             }
             _ => {}
@@ -58,7 +58,7 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
         crt_bundle_attach: Some(esp_idf_svc::sys::esp_crt_bundle_attach),
         ..Default::default()
     };
-    let mut client = APIClient::new(API_ENDPOINT, time::Duration::from_secs(30));
+    let mut client = WebSocketSession::new(API_ENDPOINT, time::Duration::from_secs(30));
 
     // Asynchronously wait for GPIO events, allowing other tasks
     // to run, or the core to sleep.

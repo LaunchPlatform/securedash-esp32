@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex, RwLock};
 const STATE_CHANNEL_QUEUE_SIZE: usize = 32;
 
 #[derive(Debug, PartialEq)]
-pub enum APIError {
+pub enum WebSocketSessionError {
     AlreadyConnected,
     NotConnectedYet,
     EspError { error: EspError },
@@ -40,42 +40,44 @@ pub enum ConnectionState {
     Disconnected,
 }
 #[derive(Debug, PartialEq)]
-pub enum APIEvent {
+pub enum SessionEvent {
     StateChange {
         old_state: ConnectionState,
         new_state: ConnectionState,
     },
 }
 
-struct APIState {
+struct SessionState {
     desired_state: DesiredState,
     connection_state: ConnectionState,
-    channel: Arc<Channel<CriticalSectionRawMutex, APIEvent, STATE_CHANNEL_QUEUE_SIZE>>,
+    channel: Arc<Channel<CriticalSectionRawMutex, SessionEvent, STATE_CHANNEL_QUEUE_SIZE>>,
 }
 
 pub struct ChannelReceiver {
-    channel: Arc<Channel<CriticalSectionRawMutex, APIEvent, STATE_CHANNEL_QUEUE_SIZE>>,
+    channel: Arc<Channel<CriticalSectionRawMutex, SessionEvent, STATE_CHANNEL_QUEUE_SIZE>>,
 }
 
 impl ChannelReceiver {
-    pub fn unwrap(&self) -> Receiver<CriticalSectionRawMutex, APIEvent, STATE_CHANNEL_QUEUE_SIZE> {
+    pub fn unwrap(
+        &self,
+    ) -> Receiver<CriticalSectionRawMutex, SessionEvent, STATE_CHANNEL_QUEUE_SIZE> {
         self.channel.receiver()
     }
 }
 
-pub struct APIClient<'a> {
+pub struct WebSocketSession<'a> {
     endpoint: String,
     timeout: time::Duration,
     config: EspWebSocketClientConfig<'a>,
     ws_client: Option<EspWebSocketClient<'a>>,
-    state: Arc<RwLock<APIState>>,
+    state: Arc<RwLock<SessionState>>,
 }
 
-impl<'a> APIClient<'a> {
+impl<'a> WebSocketSession<'a> {
     pub fn new(endpoint: &str, timeout: time::Duration) -> Self {
         let channel = Arc::new(Channel::<
             CriticalSectionRawMutex,
-            APIEvent,
+            SessionEvent,
             STATE_CHANNEL_QUEUE_SIZE,
         >::new());
         Self {
@@ -86,7 +88,7 @@ impl<'a> APIClient<'a> {
                 ..Default::default()
             },
             ws_client: None,
-            state: Arc::new(RwLock::new(APIState {
+            state: Arc::new(RwLock::new(SessionState {
                 desired_state: DesiredState::Disconnected,
                 connection_state: ConnectionState::Disconnected,
                 channel,
@@ -102,13 +104,13 @@ impl<'a> APIClient<'a> {
         self.state.read().unwrap().connection_state
     }
 
-    pub fn connect(&mut self) -> Result<(), APIError> {
+    pub fn connect(&mut self) -> Result<(), WebSocketSessionError> {
         let mut write_lock = self.state.write();
         let state = write_lock.as_mut().unwrap();
         if state.connection_state != ConnectionState::Disconnected {
             let conn_state = &state.connection_state;
             log::info!("Already in {conn_state:?} state, do nothing");
-            return Err(APIError::AlreadyConnected);
+            return Err(WebSocketSessionError::AlreadyConnected);
         }
         state.desired_state = DesiredState::Connected;
         let weak_state = Arc::downgrade(&self.state);
@@ -119,7 +121,7 @@ impl<'a> APIClient<'a> {
                     state.write().unwrap().handle_event(event);
                 }
             })
-            .map_err(|error| APIError::EspIOError { error })?,
+            .map_err(|error| WebSocketSessionError::EspIOError { error })?,
         );
         log::info!("Change desired state to Connected");
         Ok(())
@@ -139,20 +141,24 @@ impl<'a> APIClient<'a> {
         }
     }
 
-    pub fn send(&mut self, frame_type: FrameType, frame_data: &[u8]) -> Result<(), APIError> {
+    pub fn send(
+        &mut self,
+        frame_type: FrameType,
+        frame_data: &[u8],
+    ) -> Result<(), WebSocketSessionError> {
         let mut write_lock = self.state.write();
         let state = write_lock.as_mut().unwrap();
         if state.connection_state != ConnectionState::Connected {
-            return Err(APIError::NotConnectedYet);
+            return Err(WebSocketSessionError::NotConnectedYet);
         }
         let ws_client = self.ws_client.as_mut().unwrap();
         ws_client
             .send(frame_type, frame_data)
-            .map_err(|error| APIError::EspError { error })
+            .map_err(|error| WebSocketSessionError::EspError { error })
     }
 }
 
-impl APIState {
+impl SessionState {
     fn set_state(&mut self, new_state: ConnectionState) {
         let old_state = self.connection_state;
         self.connection_state = new_state;
@@ -160,7 +166,7 @@ impl APIState {
         block_on(async {
             channel
                 .sender()
-                .send(APIEvent::StateChange {
+                .send(SessionEvent::StateChange {
                     old_state,
                     new_state,
                 })
@@ -192,16 +198,16 @@ impl APIState {
                     self.set_state(ConnectionState::Closed);
                 }
                 WebSocketEventType::Text(text) => {
-                    log::info!("Websocket recv, text: {text}");
+                    log::debug!("Websocket recv, text: {text}");
                 }
                 WebSocketEventType::Binary(binary) => {
-                    log::info!("Websocket recv, binary: {binary:?}");
+                    log::debug!("Websocket recv, binary: {binary:?}");
                 }
                 WebSocketEventType::Ping => {
-                    log::info!("Websocket ping");
+                    log::debug!("Websocket ping");
                 }
                 WebSocketEventType::Pong => {
-                    log::info!("Websocket pong");
+                    log::debug!("Websocket pong");
                 }
             }
         }
