@@ -3,36 +3,94 @@ use esp_idf_svc::io::EspIOError;
 use esp_idf_svc::ws::client::{
     EspWebSocketClient, EspWebSocketClientConfig, WebSocketEvent, WebSocketEventType,
 };
+use std::cmp::PartialEq;
+use std::ops::Deref;
 use std::sync::mpsc::{channel, Sender};
+use std::sync::{Arc, Mutex, RwLock};
 
 #[derive(Debug, PartialEq)]
-enum ExampleEvent {
+enum APIError {
+    AlreadyConnected,
+}
+
+#[derive(Debug)]
+enum DesiredState {
     Connected,
-    MessageReceived,
-    Closed,
+    Disconnected,
+}
+
+#[derive(Debug, PartialEq)]
+enum ConnectionState {
+    Connecting,
+    BeforeConnect,
+    Connected,
+    Disconnected,
+}
+
+struct APIState<'a> {
+    desired_state: DesiredState,
+    connection_state: ConnectionState,
+    ws_config: Option<EspWebSocketClientConfig<'a>>,
+    ws_client: Option<EspWebSocketClient<'a>>,
 }
 
 pub struct APIClient<'a> {
-    ws_client: EspWebSocketClient<'a>,
+    endpoint: String,
+    timeout: time::Duration,
+    state: Arc<RwLock<APIState<'a>>>,
 }
 
+
 impl<'a> APIClient<'a> {
-    fn new(endpoint: String, timeout: time::Duration) -> anyhow::Result<Self> {
+    pub fn new(endpoint: String, timeout: time::Duration) -> Self {
+        let state = Arc::new(RwLock::new(APIState {
+            desired_state: DesiredState::Disconnected,
+            connection_state: ConnectionState::Disconnected,
+            ws_config: None,
+            ws_client: None,
+        }));
+        let weak_state = Arc::downgrade(&state);
+        Self {
+            endpoint,
+            timeout,
+            state,
+        }
+    }
+
+    pub fn get_desired_state(&self) -> &DesiredState {
+        &self.state.read().unwrap().desired_state
+    }
+
+    pub fn connect(&mut self) -> anyhow::<()> {
+        let state = self.state.write().unwrap();
+        if state.connection_state != ConnectionState::Disconnected {
+            let conn_state = &state.connection_state;
+            log::info!("Already in {conn_state} state, do nothing");
+            return Err(APIError::AlreadyConnected);
+        }
+        state.desired_state = DesiredState::Connected;
         let config = EspWebSocketClientConfig {
             // server_cert: Some(X509::pem_until_nul(SERVER_ROOT_CERT)),
             ..Default::default()
         };
-        let (sender, receiver) = channel::<WebSocketEvent>();
-        Ok(Self {
-            ws_client: EspWebSocketClient::new(&endpoint, &config, timeout, move |event| {
-                match event {
-                    Ok(ws_event) => sender.send(*ws_event).unwrap(),
-                    Err(err) => {}
-                };
-            })?,
-        })
+        let weak_state = Arc::downgrade(&self.state);
+        state.ws_client = Some(EspWebSocketClient::new(&self.endpoint, &config, self.timeout, move |event| {
+            let state = weak_state.upgrade();
+            if let Some(state) = state {
+                state.write().unwrap().handle_event(event);
+            }
+        })?);
+        log::info!("Change desired state to Connected");
+        Ok(())
     }
 
+    pub fn disconnect(&mut self) {
+        self.state.write().unwrap().desired_state = DesiredState::Disconnected;
+        log::info!("Change desired state to Disconnected}")
+    }
+}
+
+impl APIState {
     fn handle_event(&mut self, event: &Result<WebSocketEvent, EspIOError>) {
         if let Ok(event) = event {
             match event.event_type {
