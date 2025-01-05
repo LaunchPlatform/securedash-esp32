@@ -2,20 +2,16 @@ mod api;
 mod usb;
 mod wifi;
 
-use crate::api::websocket::{WebSocketSession, SessionEvent, ChannelReceiver, ConnectionState};
+use crate::api::websocket::{WebSocketSession, SessionEvent, ConnectionState};
 use crate::usb::msc_device::MSCDevice;
 use crate::wifi::session::WifiSession;
 use embedded_svc::wifi::AuthMethod;
 use embedded_svc::ws::FrameType;
-use embedded_svc::{http::client::Client as HttpClient, io::Write, utils::io};
 use esp_idf_svc::hal::gpio::{PinDriver, Pull};
 use esp_idf_svc::hal::prelude::Peripherals;
-use esp_idf_svc::hal::task::block_on;
-use esp_idf_svc::http::client::EspHttpConnection;
 use futures::executor::{LocalPool, LocalSpawner};
 use futures::task::LocalSpawnExt;
-use std::time::Duration;
-use std::{fs, thread, time};
+use std::{thread, time};
 
 const SSID: &str = env!("WIFI_SSID");
 const PASSWORD: &str = env!("WIFI_PASS");
@@ -54,10 +50,6 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     let mut button = PinDriver::input(peripherals.pins.gpio14)?;
     button.set_pull(Pull::Up)?;
 
-    let config = &esp_idf_svc::http::client::Configuration {
-        crt_bundle_attach: Some(esp_idf_svc::sys::esp_crt_bundle_attach),
-        ..Default::default()
-    };
     let mut client = WebSocketSession::new(API_ENDPOINT, time::Duration::from_secs(30));
 
     // Asynchronously wait for GPIO events, allowing other tasks

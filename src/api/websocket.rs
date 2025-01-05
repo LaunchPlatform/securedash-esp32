@@ -1,6 +1,6 @@
 use core::time;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::channel::{Channel, Receiver, Sender};
+use embassy_sync::channel::{Channel, Receiver};
 use embedded_svc::ws::FrameType;
 use esp_idf_svc::hal::task::block_on;
 use esp_idf_svc::io::EspIOError;
@@ -10,7 +10,7 @@ use esp_idf_svc::ws::client::{
     WebSocketEventType,
 };
 use std::cmp::PartialEq;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 
 const STATE_CHANNEL_QUEUE_SIZE: usize = 32;
 
