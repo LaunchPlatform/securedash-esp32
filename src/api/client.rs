@@ -1,7 +1,8 @@
 use core::time;
 use esp_idf_svc::io::EspIOError;
 use esp_idf_svc::ws::client::{
-    EspWebSocketClient, EspWebSocketClientConfig, WebSocketEvent, WebSocketEventType,
+    EspWebSocketClient, EspWebSocketClientConfig, WebSocketClosingReason, WebSocketEvent,
+    WebSocketEventType,
 };
 use std::cmp::PartialEq;
 use std::sync::{Arc, Mutex, RwLock};
@@ -23,6 +24,10 @@ enum ConnectionState {
     Connecting,
     BeforeConnect,
     Connected,
+    Close {
+        reason: Option<WebSocketClosingReason>,
+    },
+    Closed,
     Disconnected,
 }
 
@@ -106,14 +111,15 @@ impl APIState {
                 }
                 WebSocketEventType::Disconnected => {
                     log::info!("Websocket disconnected");
+                    self.connection_state = ConnectionState::Disconnected;
                 }
                 WebSocketEventType::Close(reason) => {
                     log::info!("Websocket close, reason: {reason:?}");
-                    self.connection_state = ConnectionState::Disconnected;
+                    self.connection_state = ConnectionState::Close { reason };
                 }
                 WebSocketEventType::Closed => {
                     log::info!("Websocket closed");
-                    self.connection_state = ConnectionState::Disconnected;
+                    self.connection_state = ConnectionState::Closed;
                 }
                 WebSocketEventType::Text(text) => {
                     log::info!("Websocket recv, text: {text}");
