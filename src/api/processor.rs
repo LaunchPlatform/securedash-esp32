@@ -1,4 +1,4 @@
-use crate::api::processor::Response::{Error, FetchFileChunk, GetInfo, ListFiles};
+use crate::api::processor::Response::{Error, FetchFileChunk, GetInfo, ListFiles, Reboot};
 use crate::api::websocket::{ConnectionState, SessionEvent, WebSocketSession};
 use embedded_svc::ws::FrameType;
 use esp_idf_svc::hal::gpio::Pull;
@@ -113,27 +113,35 @@ impl Processor {
         Ok(())
     }
 
+    fn reboot(&self) -> anyhow::Result<Response> {
+        // TODO: reboot
+        Ok(Reboot {})
+    }
+
     pub async fn process(
         &self,
         request: &CommandRequest,
         send: Box<dyn Fn(CommandResponse) -> ()>,
     ) {
-        /*
         let response: anyhow::Result<Response> = match &request.command {
             Command::GetInfo => self.get_info(),
             Command::ListFiles { path } => self.list_file(path),
             Command::FetchFile { path, chunk_size } => {
-
+                match self.fetch_file(&*request.id, path, *chunk_size, send) {
+                    Ok(_) => {
+                        return;
+                    }
+                    Err(error) => Err(error),
+                }
             }
-            Command::Reboot => {
-                // TODO: reboot
-                Response::Reboot {}
-            }
+            Command::Reboot => self.reboot(),
         };
         send(CommandResponse {
             id: request.id.clone(),
-            response,
-        });*/
+            response: response.unwrap_or_else(|error| Error {
+                message: error.to_string(),
+            }),
+        });
     }
 }
 
