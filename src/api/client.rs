@@ -12,7 +12,7 @@ pub enum APIError {
     EspIOError { error: EspIOError },
 }
 
-#[derive(Debug,Copy,Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum DesiredState {
     Connected,
     Disconnected,
@@ -38,7 +38,6 @@ pub struct APIClient<'a> {
     ws_client: Mutex<Option<EspWebSocketClient<'a>>>,
     state: Arc<RwLock<APIState>>,
 }
-
 
 impl<'a> APIClient<'a> {
     pub fn new(endpoint: String, timeout: time::Duration) -> Self {
@@ -71,12 +70,15 @@ impl<'a> APIClient<'a> {
         }
         state.desired_state = DesiredState::Connected;
         let weak_state = Arc::downgrade(&self.state);
-        * self.ws_client.lock().unwrap()  = Some(EspWebSocketClient::new(&self.endpoint, &self.config, self.timeout, move |event| {
+        *self.ws_client.lock().unwrap() = Some(
+            EspWebSocketClient::new(&self.endpoint, &self.config, self.timeout, move |event| {
                 let state = weak_state.upgrade();
                 if let Some(state) = state {
                     state.write().unwrap().handle_event(event);
                 }
-            }).map_err(|error| {APIError::EspIOError {error}})?);
+            })
+            .map_err(|error| APIError::EspIOError { error })?,
+        );
         log::info!("Change desired state to Connected");
         Ok(())
     }
