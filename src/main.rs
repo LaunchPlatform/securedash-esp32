@@ -11,6 +11,8 @@ use esp_idf_svc::hal::gpio::{PinDriver, Pull};
 use esp_idf_svc::hal::prelude::Peripherals;
 use esp_idf_svc::hal::task::block_on;
 use esp_idf_svc::http::client::EspHttpConnection;
+use futures::executor::{LocalPool, LocalSpawner};
+use futures::task::LocalSpawnExt;
 use std::time::Duration;
 use std::{fs, thread, time};
 
@@ -18,8 +20,9 @@ const SSID: &str = env!("WIFI_SSID");
 const PASSWORD: &str = env!("WIFI_PASS");
 const API_ENDPOINT: &str = env!("API_ENDPOINT");
 
+async fn read_api_events() {}
 
-async fn run_async() -> Result<(), anyhow::Error> {
+async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     log::info!(
         "Start {} - {}",
         env!("CARGO_PKG_NAME"),
@@ -71,7 +74,11 @@ fn main() -> Result<(), anyhow::Error> {
     // To use async networking IO, make your `main()` minimal by just spawning all work in a new thread
     thread::Builder::new()
         .stack_size(60000)
-        .spawn(|| block_on(async { run_async().await }))
+        .spawn(|| {
+            let mut local_executor = LocalPool::new();
+            let spawner = local_executor.spawner();
+            local_executor.run_until(async move { run_async(spawner).await })
+        })
         .unwrap()
         .join()
         .unwrap()
