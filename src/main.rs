@@ -1,3 +1,4 @@
+mod api;
 mod usb;
 mod wifi;
 
