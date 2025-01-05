@@ -83,7 +83,8 @@ impl<'a> APIClient<'a> {
     }
 
     pub fn disconnect(&mut self) {
-        let state = self.state.write().unwrap();
+        let mut write_lock = self.state.write();
+        let state = write_lock.as_mut().unwrap();
         state.ws_config = None;
         state.ws_client = None;
         state.desired_state = DesiredState::Disconnected;
