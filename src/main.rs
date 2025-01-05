@@ -2,10 +2,11 @@ mod api;
 mod usb;
 mod wifi;
 
-use crate::api::client::{APIClient, ChannelReceiver};
+use crate::api::client::{APIClient, APIEvent, ChannelReceiver, ConnectionState};
 use crate::usb::msc_device::MSCDevice;
 use crate::wifi::session::WifiSession;
 use embedded_svc::wifi::AuthMethod;
+use embedded_svc::ws::FrameType;
 use embedded_svc::{http::client::Client as HttpClient, io::Write, utils::io};
 use esp_idf_svc::hal::gpio::{PinDriver, Pull};
 use esp_idf_svc::hal::prelude::Peripherals;
@@ -20,11 +21,18 @@ const SSID: &str = env!("WIFI_SSID");
 const PASSWORD: &str = env!("WIFI_PASS");
 const API_ENDPOINT: &str = env!("API_ENDPOINT");
 
-async fn read_events(channel_receiver: ChannelReceiver) {
+async fn read_events(mut client: APIClient<'_>) {
+    client.connect();
     loop {
         log::info!("Reading events ...");
-        let data = channel_receiver.unwrap().receive().await;
-        log::info!("!!! RECEIVED {data:#?}")
+        let event = client.acquire_receiver().unwrap().receive().await;
+        log::info!("!!! RECEIVED {event:#?}");
+        match event {
+            APIEvent::StateChange { new_state: ConnectionState::Connected, .. } => {
+                client.send(FrameType::Text(false), "hello there".as_bytes()).unwrap();
+            }
+            _ => {}
+        }
     }
 }
 
@@ -51,7 +59,13 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
         ..Default::default()
     };
     let mut client = APIClient::new(API_ENDPOINT, time::Duration::from_secs(30));
-    spawner.spawn_local(read_events(client.acquire_receiver()))?;
+
+    // Asynchronously wait for GPIO events, allowing other tasks
+    // to run, or the core to sleep.
+    button.wait_for_low().await?;
+    log::info!("Button pressed!");
+
+    spawner.spawn_local(read_events(client))?;
 
     loop {
         // Asynchronously wait for GPIO events, allowing other tasks
@@ -59,7 +73,6 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
         button.wait_for_low().await?;
         log::info!("Button pressed!");
 
-        client.connect();
         // let contents = fs::read_to_string("/disk/myfile.txt").unwrap_or(String::from("N/A"));
         // log::info!("File content: {}", contents);
 

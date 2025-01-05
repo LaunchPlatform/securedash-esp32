@@ -29,7 +29,7 @@ pub enum DesiredState {
 }
 
 #[derive(Debug, PartialEq, Copy, Clone)]
-enum ConnectionState {
+pub enum ConnectionState {
     Connecting,
     BeforeConnect,
     Connected,
