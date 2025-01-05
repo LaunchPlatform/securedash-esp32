@@ -2,7 +2,7 @@ mod api;
 mod usb;
 mod wifi;
 
-use crate::api::client::APIClient;
+use crate::api::client::{APIClient, ChannelReceiver};
 use crate::usb::msc_device::MSCDevice;
 use crate::wifi::session::WifiSession;
 use embedded_svc::wifi::AuthMethod;
@@ -20,7 +20,13 @@ const SSID: &str = env!("WIFI_SSID");
 const PASSWORD: &str = env!("WIFI_PASS");
 const API_ENDPOINT: &str = env!("API_ENDPOINT");
 
-async fn read_api_events() {}
+async fn read_events(channel_receiver: ChannelReceiver) {
+    loop {
+        log::info!("Reading events ...");
+        let data = channel_receiver.receiver().receive().await;
+        log::info!("!!! RECEIVED {data:#?}")
+    }
+}
 
 async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     log::info!(
@@ -45,6 +51,7 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
         ..Default::default()
     };
     let mut client = APIClient::new(API_ENDPOINT, time::Duration::from_secs(30));
+    spawner.spawn_local(read_events(client.acquire_receiver()))?;
 
     loop {
         // Asynchronously wait for GPIO events, allowing other tasks
