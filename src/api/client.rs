@@ -4,18 +4,16 @@ use esp_idf_svc::ws::client::{
     EspWebSocketClient, EspWebSocketClientConfig, WebSocketEvent, WebSocketEventType,
 };
 use std::cmp::PartialEq;
-use std::ops::Deref;
-use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex, RwLock};
 
 #[derive(Debug, PartialEq)]
-enum APIError {
+pub enum APIError {
     AlreadyConnected,
     EspIOError { error: EspIOError },
 }
 
 #[derive(Debug,Copy,Clone)]
-enum DesiredState {
+pub enum DesiredState {
     Connected,
     Disconnected,
 }
@@ -64,7 +62,8 @@ impl<'a> APIClient<'a> {
     }
 
     pub fn connect(&mut self) -> Result<(), APIError> {
-        let state = self.state.write().unwrap();
+        let mut write_lock = self.state.write();
+        let state = write_lock.as_mut().unwrap();
         if state.connection_state != ConnectionState::Disconnected {
             let conn_state = &state.connection_state;
             log::info!("Already in {conn_state:?} state, do nothing");
@@ -72,8 +71,7 @@ impl<'a> APIClient<'a> {
         }
         state.desired_state = DesiredState::Connected;
         let weak_state = Arc::downgrade(&self.state);
-        let ws_client_lock = self.ws_client.lock().unwrap();
-        *ws_client_lock  = Some(EspWebSocketClient::new(&self.endpoint, &self.config, self.timeout, move |event| {
+        * self.ws_client.lock().unwrap()  = Some(EspWebSocketClient::new(&self.endpoint, &self.config, self.timeout, move |event| {
                 let state = weak_state.upgrade();
                 if let Some(state) = state {
                     state.write().unwrap().handle_event(event);
