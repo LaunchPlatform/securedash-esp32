@@ -145,6 +145,8 @@ impl Processor {
         let mut file = std::fs::File::open(path)?;
         let file_size = file.metadata()?.len();
         let mut buf = vec![0; chunk_size as usize];
+        let mut count: usize = 0;
+        let mut total_bytes: usize = 0;
         for offset in (0..file_size).step_by(chunk_size as usize) {
             let read_size = file.read(&mut buf)?;
             // TODO: somehow stream_position doesn't work correctly?
@@ -157,7 +159,15 @@ impl Processor {
                     is_final: offset + chunk_size >= file_size,
                 },
             });
+            count += 1;
+            total_bytes += read_size;
         }
+        log::info!(
+            "Send fetch file response for {:?}, chunk_count={}, total_size={}",
+            path,
+            count,
+            total_bytes
+        );
         Ok(())
     }
 
