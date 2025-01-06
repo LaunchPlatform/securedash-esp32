@@ -6,7 +6,6 @@ use esp_idf_svc::ping::Info;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Seek};
 use std::mem::MaybeUninit;
-use std::os::unix::fs::MetadataExt;
 use std::time;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -93,7 +92,7 @@ impl Processor {
         req_id: &str,
         path: &str,
         chunk_size: u64,
-        send: Box<dyn Fn(CommandResponse) -> ()>,
+        send: fn(CommandResponse),
     ) -> anyhow::Result<()> {
         let mut file = std::fs::File::open(path)?;
         let file_size = file.metadata()?.len();
@@ -104,7 +103,7 @@ impl Processor {
             send(CommandResponse {
                 id: req_id.to_string(),
                 response: FetchFileChunk {
-                    offset: offset,
+                    offset,
                     data: &buf,
                     is_final: offset + chunk_size >= file_size,
                 },
@@ -121,7 +120,7 @@ impl Processor {
     pub async fn process(
         &self,
         request: &CommandRequest,
-        send: Box<dyn Fn(CommandResponse) -> ()>,
+        send: fn(CommandResponse),
     ) {
         let response: anyhow::Result<Response> = match &request.command {
             Command::GetInfo => self.get_info(),
