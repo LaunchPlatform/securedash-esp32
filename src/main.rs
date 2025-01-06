@@ -10,6 +10,7 @@ use embedded_svc::wifi::AuthMethod;
 use embedded_svc::ws::FrameType;
 use esp_idf_svc::hal::gpio::{PinDriver, Pull};
 use esp_idf_svc::hal::prelude::Peripherals;
+use esp_idf_svc::sntp::EspSntp;
 use futures::executor::{LocalPool, LocalSpawner};
 use futures::task::LocalSpawnExt;
 use std::rc::Rc;
@@ -31,6 +32,10 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     let mut wifi = WifiSession::new(SSID, PASSWORD, AuthMethod::WPA2Personal, peripherals.modem)?;
     wifi.connect().await?;
     log::info!("Connected wifi: {:#?}", wifi.get_ip_info());
+
+    // Keep it around or else the SNTP service will stop
+    let _sntp = EspSntp::new_default()?;
+    log::info!("SNTP initialized, current time is {}", OffsetDateTime::now_utc());
 
     let mut msc_device = MSCDevice::new("storage", "/disk");
     msc_device.install()?;

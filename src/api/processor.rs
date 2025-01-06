@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::io::{Read, Seek};
 use std::mem::MaybeUninit;
 use std::time::SystemTime;
-use time::serde::iso8601;
+use time::serde::timestamp::milliseconds;
 use time::OffsetDateTime;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -23,9 +23,9 @@ pub enum Command {
 pub struct File {
     path: String,
     size: u64,
-    #[serde(with = "iso8601")]
+    #[serde(with = "milliseconds")]
     modified_at: OffsetDateTime,
-    #[serde(with = "iso8601")]
+    #[serde(with = "milliseconds")]
     created_at: OffsetDateTime,
     is_dir: bool,
 }
@@ -34,7 +34,7 @@ pub struct File {
 pub struct DeviceInfo {
     pub version: String,
     pub wifi_ip: String,
-    #[serde(with = "iso8601")]
+    #[serde(with = "milliseconds")]
     pub local_time: OffsetDateTime,
     pub disk_size: u64,
     pub disk_usage: u64,
