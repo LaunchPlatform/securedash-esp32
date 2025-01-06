@@ -12,8 +12,8 @@ use std::ffi::CString;
 #[derive(Default)]
 pub struct MSCDevice {
     pub partition_label: String,
-    pub base_path: String,
-    base_path_c_str: CString,
+    pub mount_path: String,
+    mount_path_c_str: CString,
     wl_partition: Option<EspWlPartition<EspPartition>>,
 }
 
@@ -36,7 +36,7 @@ unsafe extern "C" fn storage_mount_changed_cb(event: *mut tinyusb_msc_event_t) {
 impl MSCDevice {
     pub fn new(partition_label: &str, base_path: &str) -> Self {
         Self {
-            base_path: base_path.to_string(),
+            mount_path: base_path.to_string(),
             partition_label: partition_label.to_string(),
             ..Default::default()
         }
@@ -58,7 +58,7 @@ impl MSCDevice {
             Some(EspWlPartition::new(partition.unwrap()).with_context(|| {
                 format!(
                     "Failed to mount partition {} at {}",
-                    self.partition_label, self.base_path
+                    self.partition_label, self.mount_path
                 )
             })?);
 
@@ -78,9 +78,9 @@ impl MSCDevice {
         esp!(unsafe { tinyusb_msc_storage_init_spiflash(&config_spi) })
             .with_context(|| "Failed to initialize spiflash")?;
 
-        let base_path_c_str = CString::new(self.base_path.as_bytes()).unwrap();
+        let base_path_c_str = CString::new(self.mount_path.as_bytes()).unwrap();
         esp!(unsafe { tinyusb_msc_storage_mount(base_path_c_str.as_ptr()) })
-            .with_context(|| format!("Failed to mount storage at {}", self.base_path))?;
+            .with_context(|| format!("Failed to mount storage at {}", self.mount_path))?;
 
         let tusb_cfg = tinyusb_config_t::default();
         esp!(unsafe { tinyusb_driver_install(&tusb_cfg) })
@@ -88,7 +88,7 @@ impl MSCDevice {
 
         log::info!("TinyUSB driver installed.");
 
-        self.base_path_c_str = base_path_c_str;
+        self.mount_path_c_str = base_path_c_str;
         self.wl_partition = wl_partition;
         Ok(())
     }

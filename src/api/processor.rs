@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::fs::{read_dir, FileType};
 use std::io::{Read, Seek};
 use std::mem::MaybeUninit;
+use std::path::Path;
 use std::time::SystemTime;
 use time::serde::timestamp::milliseconds;
 use time::OffsetDateTime;
@@ -79,6 +80,7 @@ pub type DeviceInfoProducer = Box<dyn Fn() -> anyhow::Result<DeviceInfo>>;
 
 pub struct Processor {
     pub device_info_producer: DeviceInfoProducer,
+    pub root_dir: String,
 }
 
 impl Processor {
@@ -91,10 +93,11 @@ impl Processor {
     }
 
     fn list_files(&self, path: &str) -> anyhow::Result<Response> {
+        let dir_path = Path::new(&self.root_dir).join(path);
         // Ideally we should find a way to learn the size of all files, but we need to
         // iterate over all files anyway... so.. maybe not? :/
         let mut files: Vec<File> = vec![];
-        for entry in read_dir(path)? {
+        for entry in read_dir(dir_path)? {
             let entry = entry?;
             let path = entry.path().into_os_string().into_string().map_err(|e| {
                 anyhow!(
@@ -183,9 +186,11 @@ impl Processor {
 pub async fn process_events(
     mut client: WebSocketSession<'_>,
     device_info_producer: DeviceInfoProducer,
+    root_dir: &str,
 ) {
     let mut processor: Option<Box<Processor>> = Some(Box::new(Processor {
         device_info_producer,
+        root_dir: root_dir.to_string(),
     }));
     client.connect();
 
@@ -198,9 +203,8 @@ pub async fn process_events(
                 new_state: ConnectionState::Connected,
                 ..
             } => {
-                processor = Some(Box::new(Processor {
-                    device_info_producer: processor.map(|p| p.device_info_producer).unwrap(),
-                }));
+                let last_processor = processor.unwrap();
+                processor = Some(Box::new(Processor { ..*last_processor }));
             }
             SessionEvent::ReceiveText { text } => {
                 let request: serde_json::Result<CommandRequest> = serde_json::from_str(&text);

@@ -24,9 +24,14 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const SSID: &str = env!("WIFI_SSID");
 const PASSWORD: &str = env!("WIFI_PASS");
 const API_ENDPOINT: &str = env!("API_ENDPOINT");
+const PARTITION_LABEL: Option<&str> = option_env!("PARTITION_LABEL");
+const MOUNT_PATH: Option<&str> = option_env!("MOUNT_PATH");
 
 async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     log::info!("Start {} - {}", PKG_NAME, VERSION,);
+
+    let partition_label = PARTITION_LABEL.unwrap_or("storage");
+    let mount_path = MOUNT_PATH.unwrap_or("/disk");
 
     let peripherals = Peripherals::take()?;
     let mut wifi = WifiSession::new(SSID, PASSWORD, AuthMethod::WPA2Personal, peripherals.modem)?;
@@ -37,7 +42,7 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     let _sntp = EspSntp::new_default()?;
     log::info!("SNTP initialized");
 
-    let mut msc_device = MSCDevice::new("storage", "/disk");
+    let mut msc_device = MSCDevice::new(partition_label, mount_path);
     msc_device.install()?;
 
     let mut button = PinDriver::input(peripherals.pins.gpio14)?;
@@ -60,7 +65,7 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     button.wait_for_low().await?;
     log::info!("Button pressed!");
 
-    spawner.spawn_local(process_events(client, device_info_producer))?;
+    spawner.spawn_local(process_events(client, device_info_producer, mount_path))?;
 
     loop {
         // Asynchronously wait for GPIO events, allowing other tasks
