@@ -11,9 +11,10 @@ use std::ffi::CString;
 
 #[derive(Default)]
 pub struct MSCDevice {
-    pub partition_label: String,
-    pub mount_path: String,
+    partition_label: String,
+    mount_path: String,
     mount_path_c_str: CString,
+    high_speed: bool,
     wl_partition: Option<EspWlPartition<EspPartition>>,
 }
 
@@ -34,10 +35,11 @@ unsafe extern "C" fn storage_mount_changed_cb(event: *mut tinyusb_msc_event_t) {
 }
 
 impl MSCDevice {
-    pub fn new(partition_label: &str, base_path: &str) -> Self {
+    pub fn new(partition_label: &str, base_path: &str, high_speed: bool) -> Self {
         Self {
             mount_path: base_path.to_string(),
             partition_label: partition_label.to_string(),
+            high_speed,
             ..Default::default()
         }
     }
@@ -82,7 +84,10 @@ impl MSCDevice {
         esp!(unsafe { tinyusb_msc_storage_mount(base_path_c_str.as_ptr()) })
             .with_context(|| format!("Failed to mount storage at {}", self.mount_path))?;
 
-        let tusb_cfg = tinyusb_config_t::default();
+        let mut tusb_cfg = tinyusb_config_t::default();
+        if self.high_speed {
+            // TODO:
+        }
         esp!(unsafe { tinyusb_driver_install(&tusb_cfg) })
             .with_context(|| "Failed to install TinyUSB driver")?;
 

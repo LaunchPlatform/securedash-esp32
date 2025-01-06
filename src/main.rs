@@ -44,7 +44,7 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     let _sntp = EspSntp::new_default()?;
     log::info!("SNTP initialized");
 
-    let mut msc_device = MSCDevice::new(partition_label, mount_path);
+    let mut msc_device = MSCDevice::new(partition_label, mount_path, true);
     msc_device.install()?;
 
     let mut button = PinDriver::input(peripherals.pins.gpio14)?;
