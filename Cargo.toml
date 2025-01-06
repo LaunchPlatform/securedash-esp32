@@ -24,7 +24,7 @@ experimental = ["esp-idf-svc/experimental"]
 
 [dependencies]
 log = "0.4"
-esp-idf-svc = { version = "0.50", features = ["critical-section", "embassy-time-driver", "embassy-sync"] }
+esp-idf-svc = { version = "0.50", features = ["critical-section", "embassy-time-driver", "embassy-sync", "experimental"] }
 embedded-svc = "0.28.1"
 embassy-sync = "0.6.1"
 anyhow = "1.0.95"
