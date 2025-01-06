@@ -96,7 +96,7 @@ impl Processor {
     fn list_files(&self, path: &str) -> anyhow::Result<Response> {
         let dir_path = Path::new(&self.root_dir).join(path);
         log::info!(
-            "Listing files at {}",
+            "Listing files at {:?}",
             dir_path.to_str().unwrap_or("<Unknown>")
         );
         // Ideally we should find a way to learn the size of all files, but we need to
@@ -141,18 +141,19 @@ impl Processor {
     where
         F: FnMut(CommandResponse),
     {
+        log::info!("Fetch file at {:?}, chunk_size={}", path, chunk_size);
         let mut file = std::fs::File::open(path)?;
         let file_size = file.metadata()?.len();
         let mut buf = vec![0; chunk_size as usize];
         for offset in (0..file_size).step_by(chunk_size as usize) {
-            file.read(&mut buf)?;
+            let read_size = file.read(&mut buf)?;
             // TODO: somehow stream_position doesn't work correctly?
             // assert_eq!(file.stream_position().unwrap(), offset);
             send(CommandResponse {
                 id: req_id.to_string(),
                 response: FetchFileChunk {
                     offset,
-                    data: &buf,
+                    data: &buf[..read_size],
                     is_final: offset + chunk_size >= file_size,
                 },
             });
@@ -216,6 +217,7 @@ pub async fn process_events(
             }
             SessionEvent::ReceiveText { text } => {
                 let request: serde_json::Result<CommandRequest> = serde_json::from_str(&text);
+                log::info!("Processing request {:?}", request);
                 match request {
                     Ok(request) => processor.as_mut().unwrap().process(
                         &request,
