@@ -37,6 +37,7 @@ pub struct File {
 pub struct DeviceInfo {
     pub version: String,
     pub wifi_ip: String,
+    pub mount_path: String,
     #[serde(with = "milliseconds")]
     pub local_time: OffsetDateTime,
     pub total_volume_size: u64,

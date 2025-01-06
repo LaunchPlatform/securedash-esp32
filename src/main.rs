@@ -68,6 +68,7 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
             // TODO: maybe pass in Rc of wifi instead?
             wifi_ip: wifi.get_ip_info().unwrap().ip.to_string(),
             local_time: OffsetDateTime::now_utc(),
+            mount_path: mount_path.to_string(),
             total_volume_size,
             free_volume_size,
         })
