@@ -45,6 +45,9 @@ pub enum SessionEvent {
         old_state: ConnectionState,
         new_state: ConnectionState,
     },
+    ReceiveText {
+        text: String,
+    },
 }
 
 struct SessionState {
@@ -199,6 +202,15 @@ impl SessionState {
                 }
                 WebSocketEventType::Text(text) => {
                     log::debug!("Websocket recv, text: {text}");
+                    let channel = self.channel.clone();
+                    block_on(async {
+                        channel
+                            .sender()
+                            .send(SessionEvent::ReceiveText {
+                                text: text.to_string(),
+                            })
+                            .await;
+                    });
                 }
                 WebSocketEventType::Binary(binary) => {
                     log::debug!("Websocket recv, binary: {binary:?}");

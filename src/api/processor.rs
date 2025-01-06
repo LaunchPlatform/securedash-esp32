@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::io::{Read, Seek};
 use std::mem::MaybeUninit;
 use std::time;
+use std::time::Instant;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -72,7 +73,7 @@ pub struct CommandResponse<'a> {
 }
 
 pub struct Processor {
-    pub info_producer: dyn Fn() -> anyhow::Result<DeviceInfo>,
+    pub info_producer: Box<dyn Fn() -> anyhow::Result<DeviceInfo>>,
 }
 
 impl Processor {
@@ -92,7 +93,7 @@ impl Processor {
         req_id: &str,
         path: &str,
         chunk_size: u64,
-        send: fn(CommandResponse),
+        send: &mut Box<dyn FnMut(CommandResponse)>,
     ) -> anyhow::Result<()> {
         let mut file = std::fs::File::open(path)?;
         let file_size = file.metadata()?.len();
@@ -120,13 +121,13 @@ impl Processor {
     pub async fn process(
         &self,
         request: &CommandRequest,
-        send: fn(CommandResponse),
+        mut send: Box<dyn FnMut(CommandResponse)>,
     ) {
         let response: anyhow::Result<Response> = match &request.command {
             Command::GetInfo => self.get_info(),
             Command::ListFiles { path } => self.list_file(path),
             Command::FetchFile { path, chunk_size } => {
-                match self.fetch_file(&*request.id, path, *chunk_size, send) {
+                match self.fetch_file(&*request.id, path, *chunk_size, &mut send) {
                     Ok(_) => {
                         return;
                     }
@@ -145,6 +146,7 @@ impl Processor {
 }
 
 async fn read_events(mut client: WebSocketSession<'_>) {
+    let mut processor: Option<Box<Processor>> = None;
     client.connect();
     loop {
         log::info!("Reading events ...");
@@ -155,11 +157,39 @@ async fn read_events(mut client: WebSocketSession<'_>) {
                 new_state: ConnectionState::Connected,
                 ..
             } => {
-                client
-                    .send(FrameType::Text(false), "hello there".as_bytes())
-                    .unwrap();
+                processor = Some(Box::new(Processor {
+                    info_producer: Box::new(|| {
+                        Ok(DeviceInfo {
+                            version: "".to_string(),
+                            wifi_ip: "".to_string(),
+                            local_time: Instant::now(),
+                            disk_size: 0,
+                            disk_usage: 0,
+                        })
+                    }),
+                }));
             }
-            _ => {}
+            SessionEvent::ReceiveText { text } => {
+                let request: serde_json::Result<CommandRequest> = serde_json::from_str(&text);
+                match request {
+                    Ok(request) => {
+                        processor
+                            .as_mut()
+                            .process(&request, |response: CommandResponse| {
+                                match response.response {
+                                    FetchFileChunk { .. } => {}
+                                    _ => client.send(
+                                        FrameType::Text(false),
+                                        serde_json::to_string(response).unwrap().as_bytes(),
+                                    ),
+                                }
+                            })
+                    }
+                    Err(error) => {
+                        log::error!("Failed to parse payload with error: {error}")
+                    }
+                }
+            }
         }
     }
 }
