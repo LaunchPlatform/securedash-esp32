@@ -93,7 +93,7 @@ impl Processor {
         req_id: &str,
         path: &str,
         chunk_size: u64,
-        send: &mut Box<dyn FnMut(CommandResponse)>,
+        mut send: fn(CommandResponse),
     ) -> anyhow::Result<()> {
         let mut file = std::fs::File::open(path)?;
         let file_size = file.metadata()?.len();
@@ -118,16 +118,12 @@ impl Processor {
         Ok(Reboot {})
     }
 
-    pub async fn process(
-        &self,
-        request: &CommandRequest,
-        mut send: Box<dyn FnMut(CommandResponse)>,
-    ) {
+    pub fn process(&self, request: &CommandRequest, send: Box<dyn FnMut(CommandResponse)>) {
         let response: anyhow::Result<Response> = match &request.command {
             Command::GetInfo => self.get_info(),
             Command::ListFiles { path } => self.list_file(path),
             Command::FetchFile { path, chunk_size } => {
-                match self.fetch_file(&*request.id, path, *chunk_size, &mut send) {
+                match self.fetch_file(&*request.id, path, *chunk_size, send) {
                     Ok(_) => {
                         return;
                     }
@@ -148,6 +144,7 @@ impl Processor {
 async fn read_events(mut client: WebSocketSession<'_>) {
     let mut processor: Option<Box<Processor>> = None;
     client.connect();
+
     loop {
         log::info!("Reading events ...");
         let event = client.acquire_receiver().unwrap().receive().await;
@@ -172,23 +169,27 @@ async fn read_events(mut client: WebSocketSession<'_>) {
             SessionEvent::ReceiveText { text } => {
                 let request: serde_json::Result<CommandRequest> = serde_json::from_str(&text);
                 match request {
-                    Ok(request) => {
-                        processor
-                            .as_mut()
-                            .process(&request, |response: CommandResponse| {
-                                match response.response {
-                                    FetchFileChunk { .. } => {}
-                                    _ => client.send(
-                                        FrameType::Text(false),
-                                        serde_json::to_string(response).unwrap().as_bytes(),
-                                    ),
-                                }
-                            })
-                    }
+                    Ok(request) => processor.as_mut().unwrap().process(
+                        &request,
+                        Box::new(|response: CommandResponse| match response.response {
+                            FetchFileChunk { .. } => {
+                                // TODO:
+                            }
+                            _ => client
+                                .send(
+                                    FrameType::Text(false),
+                                    serde_json::to_string(&response).unwrap().as_bytes(),
+                                )
+                                .unwrap(),
+                        }),
+                    ),
                     Err(error) => {
                         log::error!("Failed to parse payload with error: {error}")
                     }
                 }
+            }
+            _ => {
+                panic!()
             }
         }
     }
