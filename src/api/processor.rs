@@ -78,7 +78,11 @@ pub struct Processor {
 
 impl Processor {
     fn get_info(&self) -> anyhow::Result<Response> {
-        (self.info_producer)().map(|device_info: DeviceInfo| GetInfo { device_info })
+        let result = (self.info_producer)();
+        if let Ok(device_info) = &result {
+            log::info!("Get device info {device_info:#?}");
+        }
+        result.map(|device_info: DeviceInfo| GetInfo { device_info })
     }
 
     fn list_file(&self, path: &str) -> anyhow::Result<Response> {
@@ -96,7 +100,7 @@ impl Processor {
         mut send: F,
     ) -> anyhow::Result<()>
     where
-        F: FnMut(CommandResponse)
+        F: FnMut(CommandResponse),
     {
         let mut file = std::fs::File::open(path)?;
         let file_size = file.metadata()?.len();
@@ -147,7 +151,7 @@ impl Processor {
     }
 }
 
-async fn read_events(mut client: WebSocketSession<'_>) {
+pub async fn process_events(mut client: WebSocketSession<'_>) {
     let mut processor: Option<Box<Processor>> = None;
     client.connect();
 
@@ -194,9 +198,7 @@ async fn read_events(mut client: WebSocketSession<'_>) {
                     }
                 }
             }
-            _ => {
-                panic!()
-            }
+            _ => {}
         }
     }
 }

@@ -12,25 +12,11 @@ use esp_idf_svc::hal::prelude::Peripherals;
 use futures::executor::{LocalPool, LocalSpawner};
 use futures::task::LocalSpawnExt;
 use std::{thread, time};
+use crate::api::processor::process_events;
 
 const SSID: &str = env!("WIFI_SSID");
 const PASSWORD: &str = env!("WIFI_PASS");
 const API_ENDPOINT: &str = env!("API_ENDPOINT");
-
-async fn read_events(mut client: WebSocketSession<'_>) {
-    client.connect();
-    loop {
-        log::info!("Reading events ...");
-        let event = client.acquire_receiver().unwrap().receive().await;
-        log::info!("!!! RECEIVED {event:#?}");
-        match event {
-            SessionEvent::StateChange { new_state: ConnectionState::Connected, .. } => {
-                client.send(FrameType::Text(false), "hello there".as_bytes()).unwrap();
-            }
-            _ => {}
-        }
-    }
-}
 
 async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     log::info!(
@@ -57,7 +43,7 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     button.wait_for_low().await?;
     log::info!("Button pressed!");
 
-    spawner.spawn_local(read_events(client))?;
+    spawner.spawn_local(process_events(client))?;
 
     loop {
         // Asynchronously wait for GPIO events, allowing other tasks
