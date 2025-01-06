@@ -35,7 +35,7 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
 
     // Keep it around or else the SNTP service will stop
     let _sntp = EspSntp::new_default()?;
-    log::info!("SNTP initialized, current time is {}", OffsetDateTime::now_utc());
+    log::info!("SNTP initialized");
 
     let mut msc_device = MSCDevice::new("storage", "/disk");
     msc_device.install()?;
