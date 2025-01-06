@@ -1,9 +1,11 @@
 use crate::api::processor::Response::{Error, FetchFileChunk, GetInfo, ListFiles, Reboot};
 use crate::api::websocket::{ConnectionState, SessionEvent, WebSocketSession};
+use anyhow::anyhow;
 use embedded_svc::ws::FrameType;
 use esp_idf_svc::hal::gpio::Pull;
 use esp_idf_svc::ping::Info;
 use serde::{Deserialize, Serialize};
+use std::fs::{read_dir, FileType};
 use std::io::{Read, Seek};
 use std::mem::MaybeUninit;
 use std::time::SystemTime;
@@ -88,10 +90,34 @@ impl Processor {
         result.map(|device_info: DeviceInfo| GetInfo { device_info })
     }
 
-    fn list_file(&self, path: &str) -> anyhow::Result<Response> {
+    fn list_files(&self, path: &str) -> anyhow::Result<Response> {
+        // Ideally we should find a way to learn the size of all files, but we need to
+        // iterate over all files anyway... so.. maybe not? :/
+        let mut files: Vec<File> = vec![];
+        for entry in read_dir(path)? {
+            let entry = entry?;
+            let path = entry.path().into_os_string().into_string().map_err(|e| {
+                anyhow!(
+                    "Failed to decode path with error: {}",
+                    e.into_string().unwrap_or(String::from("Unknown"))
+                )
+            });
+            if path.is_err() {
+                continue;
+            }
+            let path = path.unwrap();
+            let metadata = entry.metadata()?;
+            files.push(File {
+                path,
+                size: metadata.len(),
+                modified_at: metadata.modified()?.into(),
+                created_at: metadata.created()?.into(),
+                is_dir: metadata.is_dir(),
+            })
+        }
         Ok(ListFiles {
             path: path.to_string(),
-            files: vec![],
+            files,
         })
     }
 
@@ -134,7 +160,7 @@ impl Processor {
     {
         let response: anyhow::Result<Response> = match &request.command {
             Command::GetInfo => self.get_info(),
-            Command::ListFiles { path } => self.list_file(path),
+            Command::ListFiles { path } => self.list_files(path),
             Command::FetchFile { path, chunk_size } => {
                 match self.fetch_file(&*request.id, path, *chunk_size, &mut send) {
                     Ok(_) => {
