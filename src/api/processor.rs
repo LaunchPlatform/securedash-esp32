@@ -6,8 +6,9 @@ use esp_idf_svc::ping::Info;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Seek};
 use std::mem::MaybeUninit;
-use std::time;
-use std::time::Instant;
+use std::time::SystemTime;
+use time::serde::iso8601;
+use time::OffsetDateTime;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type")]
@@ -22,21 +23,21 @@ pub enum Command {
 pub struct File {
     path: String,
     size: u64,
-    #[serde(with = "serde_millis")]
-    modified_at: Instant,
-    #[serde(with = "serde_millis")]
-    created_at: Instant,
+    #[serde(with = "iso8601")]
+    modified_at: OffsetDateTime,
+    #[serde(with = "iso8601")]
+    created_at: OffsetDateTime,
     is_dir: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DeviceInfo {
-    version: String,
-    wifi_ip: String,
-    #[serde(with = "serde_millis")]
-    local_time: time::Instant,
-    disk_size: u64,
-    disk_usage: u64,
+    pub version: String,
+    pub wifi_ip: String,
+    #[serde(with = "iso8601")]
+    pub local_time: OffsetDateTime,
+    pub disk_size: u64,
+    pub disk_usage: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -72,13 +73,15 @@ pub struct CommandResponse<'a> {
     pub response: Response<'a>,
 }
 
+pub type DeviceInfoProducer = Box<dyn Fn() -> anyhow::Result<DeviceInfo>>;
+
 pub struct Processor {
-    pub info_producer: Box<dyn Fn() -> anyhow::Result<DeviceInfo>>,
+    pub device_info_producer: DeviceInfoProducer,
 }
 
 impl Processor {
     fn get_info(&self) -> anyhow::Result<Response> {
-        let result = (self.info_producer)();
+        let result = (self.device_info_producer)();
         if let Ok(device_info) = &result {
             log::info!("Get device info {device_info:#?}");
         }
@@ -151,8 +154,13 @@ impl Processor {
     }
 }
 
-pub async fn process_events(mut client: WebSocketSession<'_>) {
-    let mut processor: Option<Box<Processor>> = None;
+pub async fn process_events(
+    mut client: WebSocketSession<'_>,
+    device_info_producer: DeviceInfoProducer,
+) {
+    let mut processor: Option<Box<Processor>> = Some(Box::new(Processor {
+        device_info_producer,
+    }));
     client.connect();
 
     loop {
@@ -165,15 +173,7 @@ pub async fn process_events(mut client: WebSocketSession<'_>) {
                 ..
             } => {
                 processor = Some(Box::new(Processor {
-                    info_producer: Box::new(|| {
-                        Ok(DeviceInfo {
-                            version: "".to_string(),
-                            wifi_ip: "".to_string(),
-                            local_time: Instant::now(),
-                            disk_size: 0,
-                            disk_usage: 0,
-                        })
-                    }),
+                    device_info_producer: processor.map(|p| p.device_info_producer).unwrap(),
                 }));
             }
             SessionEvent::ReceiveText { text } => {

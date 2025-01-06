@@ -2,7 +2,8 @@ mod api;
 mod usb;
 mod wifi;
 
-use crate::api::websocket::{WebSocketSession, SessionEvent, ConnectionState};
+use crate::api::processor::{process_events, DeviceInfo, DeviceInfoProducer};
+use crate::api::websocket::{ConnectionState, SessionEvent, WebSocketSession};
 use crate::usb::msc_device::MSCDevice;
 use crate::wifi::session::WifiSession;
 use embedded_svc::wifi::AuthMethod;
@@ -11,21 +12,22 @@ use esp_idf_svc::hal::gpio::{PinDriver, Pull};
 use esp_idf_svc::hal::prelude::Peripherals;
 use futures::executor::{LocalPool, LocalSpawner};
 use futures::task::LocalSpawnExt;
-use std::{thread, time};
-use crate::api::processor::process_events;
+use std::rc::Rc;
+use std::thread;
+use std::time::Duration;
+use time::OffsetDateTime;
+
+const PKG_NAME: &str = env!("CARGO_PKG_NAME");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const SSID: &str = env!("WIFI_SSID");
 const PASSWORD: &str = env!("WIFI_PASS");
 const API_ENDPOINT: &str = env!("API_ENDPOINT");
 
 async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
-    log::info!(
-        "Start {} - {}",
-        env!("CARGO_PKG_NAME"),
-        env!("CARGO_PKG_VERSION")
-    );
+    log::info!("Start {} - {}", PKG_NAME, VERSION,);
 
-    let peripherals = Peripherals::take().expect("@@@ Take Peripherals failed");
+    let peripherals = Peripherals::take()?;
     let mut wifi = WifiSession::new(SSID, PASSWORD, AuthMethod::WPA2Personal, peripherals.modem)?;
     wifi.connect().await?;
     log::info!("Connected wifi: {:#?}", wifi.get_ip_info());
@@ -36,14 +38,24 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     let mut button = PinDriver::input(peripherals.pins.gpio14)?;
     button.set_pull(Pull::Up)?;
 
-    let mut client = WebSocketSession::new(API_ENDPOINT, time::Duration::from_secs(30));
+    let mut client = WebSocketSession::new(API_ENDPOINT, Duration::from_secs(30));
 
-    // Asynchronously wait for GPIO events, allowing other tasks
-    // to run, or the core to sleep.
+    let device_info_producer: DeviceInfoProducer = Box::new(move || {
+        Ok(DeviceInfo {
+            version: VERSION.to_string(),
+            // TODO: maybe pass in Rc of wifi instead?
+            wifi_ip: wifi.get_ip_info().unwrap().ip.to_string(),
+            local_time: OffsetDateTime::now_utc(),
+            // TODO:
+            disk_size: 0,
+            disk_usage: 0,
+        })
+    });
+
     button.wait_for_low().await?;
     log::info!("Button pressed!");
 
-    spawner.spawn_local(process_events(client))?;
+    spawner.spawn_local(process_events(client, device_info_producer))?;
 
     loop {
         // Asynchronously wait for GPIO events, allowing other tasks
