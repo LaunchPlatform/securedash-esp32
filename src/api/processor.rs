@@ -116,6 +116,8 @@ impl Processor {
                 path,
                 size: metadata.len(),
                 modified_at: metadata.modified()?.into(),
+                // TODO: somehow there's a bug or what making create time always returns zero,
+                //       may need to find a time to debug it
                 created_at: metadata.created()?.into(),
                 is_dir: metadata.is_dir(),
             })
