@@ -9,7 +9,7 @@ use std::mem::MaybeUninit;
 use std::time;
 use std::time::Instant;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type")]
 pub enum Command {
     GetInfo,
@@ -18,18 +18,18 @@ pub enum Command {
     Reboot,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct File {
     path: String,
     size: u64,
     #[serde(with = "serde_millis")]
-    modified_at: time::Instant,
+    modified_at: Instant,
     #[serde(with = "serde_millis")]
-    created_at: time::Instant,
+    created_at: Instant,
     is_dir: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DeviceInfo {
     version: String,
     wifi_ip: String,
@@ -39,7 +39,7 @@ pub struct DeviceInfo {
     disk_usage: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type")]
 pub enum Response<'a> {
     GetInfo {
@@ -60,13 +60,13 @@ pub enum Response<'a> {
     },
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CommandRequest {
     pub id: String,
     pub command: Command,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct CommandResponse<'a> {
     pub id: String,
     pub response: Response<'a>,
@@ -88,13 +88,16 @@ impl Processor {
         })
     }
 
-    fn fetch_file(
+    fn fetch_file<F>(
         &self,
         req_id: &str,
         path: &str,
         chunk_size: u64,
-        mut send: fn(CommandResponse),
-    ) -> anyhow::Result<()> {
+        mut send: F,
+    ) -> anyhow::Result<()>
+    where
+        F: FnMut(CommandResponse)
+    {
         let mut file = std::fs::File::open(path)?;
         let file_size = file.metadata()?.len();
         let mut buf = vec![0; chunk_size as usize];
@@ -118,12 +121,15 @@ impl Processor {
         Ok(Reboot {})
     }
 
-    pub fn process(&self, request: &CommandRequest, send: Box<dyn FnMut(CommandResponse)>) {
+    pub fn process<F>(&self, request: &CommandRequest, mut send: F)
+    where
+        F: FnMut(CommandResponse),
+    {
         let response: anyhow::Result<Response> = match &request.command {
             Command::GetInfo => self.get_info(),
             Command::ListFiles { path } => self.list_file(path),
             Command::FetchFile { path, chunk_size } => {
-                match self.fetch_file(&*request.id, path, *chunk_size, send) {
+                match self.fetch_file(&*request.id, path, *chunk_size, &mut send) {
                     Ok(_) => {
                         return;
                     }
@@ -171,7 +177,7 @@ async fn read_events(mut client: WebSocketSession<'_>) {
                 match request {
                     Ok(request) => processor.as_mut().unwrap().process(
                         &request,
-                        Box::new(|response: CommandResponse| match response.response {
+                        |response: CommandResponse| match response.response {
                             FetchFileChunk { .. } => {
                                 // TODO:
                             }
@@ -181,7 +187,7 @@ async fn read_events(mut client: WebSocketSession<'_>) {
                                     serde_json::to_string(&response).unwrap().as_bytes(),
                                 )
                                 .unwrap(),
-                        }),
+                        },
                     ),
                     Err(error) => {
                         log::error!("Failed to parse payload with error: {error}")
