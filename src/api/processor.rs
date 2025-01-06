@@ -1,17 +1,13 @@
 use crate::api::processor::Response::{Error, FetchFileChunk, GetInfo, ListFiles, Reboot};
 use crate::api::websocket::{ConnectionState, SessionEvent, WebSocketSession};
-use anyhow::{anyhow, bail};
+use anyhow::anyhow;
 use embedded_svc::ws::FrameType;
 use esp_idf_svc::hal::gpio::Pull;
 use esp_idf_svc::ping::Info;
-use esp_idf_svc::sys::{ctime, fstat, stat, strerror, S_IFDIR, S_IFMT};
 use serde::{Deserialize, Serialize};
-use std::ffi::CString;
 use std::fs::{read_dir, FileType};
 use std::io::{Read, Seek};
 use std::mem::MaybeUninit;
-use std::os::fd::AsFd;
-use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::time::SystemTime;
 use time::serde::timestamp::milliseconds;
@@ -98,10 +94,7 @@ impl Processor {
 
     fn list_files(&self, path: &str) -> anyhow::Result<Response> {
         let dir_path = Path::new(&self.root_dir).join(path);
-        log::info!(
-            "Listing files at {}",
-            dir_path.to_str().unwrap_or("<Unknown>")
-        );
+        log::info!("Listing files at {}", dir_path.to_str().unwrap_or("<Unknown>"));
         // Ideally we should find a way to learn the size of all files, but we need to
         // iterate over all files anyway... so.. maybe not? :/
         let mut files: Vec<File> = vec![];
@@ -117,25 +110,13 @@ impl Processor {
                 continue;
             }
             let path = path.unwrap();
-
-            // Notice: there's entry.metadata(), but somehow the implementation of rust's std
-            //         is broken and cannot return correct stat. So we call C lib directly to get
-            //         stat for the file instead.
-            let path_c_str = CString::new(path.as_bytes());
-            let mut file_stat = stat::default();
-            let ret = unsafe { stat(path_c_str?.as_ptr(), &mut file_stat) };
-            if ret != 0 {
-                bail!("Failed to get file {} stat with error: {}", path, unsafe {
-                    CString::from_raw(strerror(ret)).to_str()?
-                });
-            }
-
+            let metadata = entry.metadata()?;
             files.push(File {
                 path,
-                size: file_stat.st_size as u64,
-                modified_at: OffsetDateTime::from_unix_timestamp(file_stat.st_mtim.tv_sec)?,
-                created_at: OffsetDateTime::from_unix_timestamp(file_stat.st_ctim.tv_sec)?,
-                is_dir: file_stat.st_mode & S_IFMT == S_IFDIR,
+                size: metadata.len(),
+                modified_at: metadata.modified()?.into(),
+                created_at: metadata.created()?.into(),
+                is_dir: metadata.is_dir(),
             })
         }
         Ok(ListFiles {
