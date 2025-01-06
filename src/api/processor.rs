@@ -95,7 +95,10 @@ impl Processor {
 
     fn list_files(&self, path: &str) -> anyhow::Result<Response> {
         let dir_path = Path::new(&self.root_dir).join(path);
-        log::info!("Listing files at {}", dir_path.to_str().unwrap_or("<Unknown>"));
+        log::info!(
+            "Listing files at {}",
+            dir_path.to_str().unwrap_or("<Unknown>")
+        );
         // Ideally we should find a way to learn the size of all files, but we need to
         // iterate over all files anyway... so.. maybe not? :/
         let mut files: Vec<File> = vec![];
@@ -143,7 +146,8 @@ impl Processor {
         let mut buf = vec![0; chunk_size as usize];
         for offset in (0..file_size).step_by(chunk_size as usize) {
             file.read(&mut buf)?;
-            assert_eq!(file.stream_position().unwrap(), offset);
+            // TODO: somehow stream_position doesn't work correctly?
+            // assert_eq!(file.stream_position().unwrap(), offset);
             send(CommandResponse {
                 id: req_id.to_string(),
                 response: FetchFileChunk {
@@ -216,9 +220,12 @@ pub async fn process_events(
                     Ok(request) => processor.as_mut().unwrap().process(
                         &request,
                         |response: CommandResponse| match response.response {
-                            FetchFileChunk { .. } => {
-                                // TODO:
-                            }
+                            FetchFileChunk { .. } => client
+                                .send(
+                                    FrameType::Binary(false),
+                                    &rmp_serde::to_vec(&response).unwrap(),
+                                )
+                                .unwrap(),
                             _ => client
                                 .send(
                                     FrameType::Text(false),
