@@ -11,8 +11,10 @@ use embedded_svc::ws::FrameType;
 use esp_idf_svc::hal::gpio::{PinDriver, Pull};
 use esp_idf_svc::hal::prelude::Peripherals;
 use esp_idf_svc::sntp::EspSntp;
+use esp_idf_svc::sys::{esp, esp_vfs_fat_info, free};
 use futures::executor::{LocalPool, LocalSpawner};
 use futures::task::LocalSpawnExt;
+use std::ffi::CString;
 use std::rc::Rc;
 use std::thread;
 use std::time::Duration;
@@ -51,14 +53,23 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     let mut client = WebSocketSession::new(API_ENDPOINT, Duration::from_secs(30));
 
     let device_info_producer: DeviceInfoProducer = Box::new(move || {
+        let mount_path_c_str = CString::new(mount_path.as_bytes()).unwrap();
+        let mut total_volume_size: u64 = 0;
+        let mut free_volume_size: u64 = 0;
+        esp!(unsafe {
+            esp_vfs_fat_info(
+                mount_path_c_str.as_ptr(),
+                &mut total_volume_size,
+                &mut free_volume_size,
+            )
+        })?;
         Ok(DeviceInfo {
             version: VERSION.to_string(),
             // TODO: maybe pass in Rc of wifi instead?
             wifi_ip: wifi.get_ip_info().unwrap().ip.to_string(),
             local_time: OffsetDateTime::now_utc(),
-            // TODO:
-            disk_size: 0,
-            disk_usage: 0,
+            total_volume_size,
+            free_volume_size,
         })
     });
 

@@ -39,8 +39,8 @@ pub struct DeviceInfo {
     pub wifi_ip: String,
     #[serde(with = "milliseconds")]
     pub local_time: OffsetDateTime,
-    pub disk_size: u64,
-    pub disk_usage: u64,
+    pub total_volume_size: u64,
+    pub free_volume_size: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -94,6 +94,7 @@ impl Processor {
 
     fn list_files(&self, path: &str) -> anyhow::Result<Response> {
         let dir_path = Path::new(&self.root_dir).join(path);
+        log::info!("Listing files at {}", dir_path.to_str().unwrap_or("<Unknown>"));
         // Ideally we should find a way to learn the size of all files, but we need to
         // iterate over all files anyway... so.. maybe not? :/
         let mut files: Vec<File> = vec![];
