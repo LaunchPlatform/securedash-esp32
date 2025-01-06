@@ -206,7 +206,6 @@ pub async fn process_events(
     loop {
         log::info!("Reading events ...");
         let event = client.acquire_receiver().unwrap().receive().await;
-        log::info!("!!! RECEIVED {event:#?}");
         match event {
             SessionEvent::StateChange {
                 new_state: ConnectionState::Connected,
@@ -217,25 +216,27 @@ pub async fn process_events(
             }
             SessionEvent::ReceiveText { text } => {
                 let request: serde_json::Result<CommandRequest> = serde_json::from_str(&text);
-                log::info!("Processing request {:?}", request);
                 match request {
-                    Ok(request) => processor.as_mut().unwrap().process(
-                        &request,
-                        |response: CommandResponse| match response.response {
-                            FetchFileChunk { .. } => client
-                                .send(
-                                    FrameType::Binary(false),
-                                    &rmp_serde::to_vec(&response).unwrap(),
-                                )
-                                .unwrap(),
-                            _ => client
-                                .send(
-                                    FrameType::Text(false),
-                                    serde_json::to_string(&response).unwrap().as_bytes(),
-                                )
-                                .unwrap(),
-                        },
-                    ),
+                    Ok(request) => {
+                        log::info!("Processing request {:?}", request);
+                        processor.as_mut().unwrap().process(
+                            &request,
+                            |response: CommandResponse| match response.response {
+                                FetchFileChunk { .. } => client
+                                    .send(
+                                        FrameType::Binary(false),
+                                        &rmp_serde::to_vec(&response).unwrap(),
+                                    )
+                                    .unwrap(),
+                                _ => client
+                                    .send(
+                                        FrameType::Text(false),
+                                        serde_json::to_string(&response).unwrap().as_bytes(),
+                                    )
+                                    .unwrap(),
+                            },
+                        )
+                    }
                     Err(error) => {
                         log::error!("Failed to parse payload with error: {error}")
                     }
