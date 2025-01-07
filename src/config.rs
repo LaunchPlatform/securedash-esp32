@@ -55,7 +55,7 @@ impl Default for Usb {
 pub struct Config {
     pub wifi: Wifi,
     pub api: Api,
-    pub usb: Usb,
+    pub usb: Option<Usb>,
 }
 
 impl Config {
