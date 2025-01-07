@@ -80,10 +80,6 @@ impl MSCDevice {
         esp!(unsafe { tinyusb_msc_storage_init_spiflash(&config_spi) })
             .with_context(|| "Failed to initialize spiflash")?;
 
-        let base_path_c_str = CString::new(self.mount_path.as_bytes()).unwrap();
-        esp!(unsafe { tinyusb_msc_storage_mount(base_path_c_str.as_ptr()) })
-            .with_context(|| format!("Failed to mount storage at {}", self.mount_path))?;
-
         let mut tusb_cfg = tinyusb_config_t::default();
         if self.high_speed {
             // TODO:
@@ -93,7 +89,6 @@ impl MSCDevice {
 
         log::info!("TinyUSB driver installed.");
 
-        self.mount_path_c_str = base_path_c_str;
         self.wl_partition = wl_partition;
         Ok(())
     }

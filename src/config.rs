@@ -1,4 +1,3 @@
-use anyhow::Debug;
 use serde::Deserialize;
 use std::fmt::{Debug, Formatter};
 
@@ -40,8 +39,13 @@ struct Api {
 
 #[derive(Debug, Default, Deserialize)]
 struct Usb {
-    #[derivative(Default(value = "true"))]
     high_speed: bool,
+}
+
+impl Default for Usb {
+    fn default() -> Self {
+        Self { high_speed: true }
+    }
 }
 
 #[derive(Debug, Deserialize)]
