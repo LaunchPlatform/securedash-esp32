@@ -1,5 +1,7 @@
 use anyhow::{bail, Context};
+use esp_idf_svc::handle::RawHandle;
 use esp_idf_svc::partition::{EspPartition, EspWlPartition};
+use esp_idf_svc::sys::wl_handle_t;
 
 #[derive(Debug, Clone)]
 pub struct SPIFlashConfig {
@@ -44,5 +46,13 @@ impl SPIFlashStorage {
             self.config.mount_path
         );
         Ok(())
+    }
+}
+
+impl RawHandle for SPIFlashStorage {
+    type Handle = wl_handle_t;
+
+    fn handle(&self) -> Self::Handle {
+        self.wl_partition.as_ref().unwrap().handle()
     }
 }

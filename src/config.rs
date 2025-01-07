@@ -15,7 +15,7 @@ pub enum AuthMethod {
     WAPIPersonal,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 struct Wifi {
     ssid: String,
     auth_method: AuthMethod,
@@ -27,7 +27,7 @@ impl Debug for Wifi {
         f.debug_struct("Wifi")
             .field("ssid", &self.ssid)
             .field("auth_method", &self.auth_method)
-            .field("password", "****")
+            .field("password", &"****")
             .finish()
     }
 }
@@ -37,7 +37,7 @@ struct Api {
     endpoint: String,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Deserialize)]
 struct Usb {
     high_speed: bool,
 }
