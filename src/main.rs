@@ -70,8 +70,11 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     msc_device.install()?;
 
     let peripherals = Peripherals::take()?;
+    let mut button = PinDriver::input(peripherals.pins.gpio14)?;
+    button.set_pull(Pull::Up)?;
 
-    let mut wifi: Option<WifiSession> = None;
+    let mut _wifi: Option<WifiSession> = None;
+    let mut _sntp: Option<EspSntp> = None;
     if let Some(config) = &config {
         let mut wifi = WifiSession::new(
             &WifiConfig {
@@ -83,15 +86,13 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
         )?;
         wifi.connect().await?;
         log::info!("Connected wifi: {:#?}", wifi.get_ip_info());
+        _wifi = Some(wifi);
 
         // Keep it around or else the SNTP service will stop
-        let _sntp = EspSntp::new_default()?;
+        _sntp = Some(EspSntp::new_default()?);
         log::info!("SNTP initialized");
 
-        let mut button = PinDriver::input(peripherals.pins.gpio14)?;
-        button.set_pull(Pull::Up)?;
-
-        let mut client = WebSocketSession::new(API_ENDPOINT, Duration::from_secs(30));
+        let mut client = WebSocketSession::new(&config.api.endpoint, Duration::from_secs(30));
 
         let captured_mount_path = mount_path.clone();
         let mount_path_c_str = CString::new(mount_path.as_bytes())?;
@@ -119,7 +120,11 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
         button.wait_for_low().await?;
         log::info!("Button pressed!");
 
-        spawner.spawn_local(process_events(client, device_info_producer, mount_path))?;
+        spawner.spawn_local(process_events(
+            client,
+            device_info_producer,
+            mount_path.to_string(),
+        ))?;
     }
 
     loop {
