@@ -1,11 +1,12 @@
 mod api;
-mod usb;
-mod wifi;
 mod config;
 mod storage;
+mod usb;
+mod wifi;
 
 use crate::api::processor::{process_events, DeviceInfo, DeviceInfoProducer};
 use crate::api::websocket::{ConnectionState, SessionEvent, WebSocketSession};
+use crate::storage::spiflash::{SPIFlashConfig, SPIFlashStorage};
 use crate::usb::msc_device::MSCDevice;
 use crate::wifi::session::WifiSession;
 use embedded_svc::wifi::AuthMethod;
@@ -34,8 +35,10 @@ const MOUNT_PATH: Option<&str> = option_env!("MOUNT_PATH");
 async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     log::info!("Start {} - {}", PKG_NAME, VERSION,);
 
-    let partition_label = PARTITION_LABEL.unwrap_or("storage");
-    let mount_path = MOUNT_PATH.unwrap_or("/disk");
+    let storage = Box::new(SPIFlashStorage::new(&SPIFlashConfig {
+        partition_label: PARTITION_LABEL.unwrap_or("storage").to_string(),
+        mount_path: MOUNT_PATH.unwrap_or("/disk").to_string(),
+    }));
 
     let peripherals = Peripherals::take()?;
     let mut wifi = WifiSession::new(SSID, PASSWORD, AuthMethod::WPA2Personal, peripherals.modem)?;

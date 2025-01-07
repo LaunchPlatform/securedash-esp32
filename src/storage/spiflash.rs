@@ -1,7 +1,9 @@
 use anyhow::{bail, Context};
+use esp_idf_svc::fs::fatfs::Fatfs;
 use esp_idf_svc::handle::RawHandle;
+use esp_idf_svc::io::vfs::MountedFatfs;
 use esp_idf_svc::partition::{EspPartition, EspWlPartition};
-use esp_idf_svc::sys::wl_handle_t;
+use esp_idf_svc::sys::{esp, ff_diskio_get_drive, wl_handle_t};
 
 #[derive(Debug, Clone)]
 pub struct SPIFlashConfig {
@@ -12,6 +14,7 @@ pub struct SPIFlashConfig {
 pub struct SPIFlashStorage {
     config: SPIFlashConfig,
     wl_partition: Option<EspWlPartition<EspPartition>>,
+    mounted_fatfs: Option<MountedFatfs<Fatfs<()>>>,
 }
 
 impl SPIFlashStorage {
@@ -19,10 +22,11 @@ impl SPIFlashStorage {
         Self {
             config: config.clone(),
             wl_partition: None,
+            mounted_fatfs: None,
         }
     }
 
-    pub fn install(&mut self) -> anyhow::Result<()> {
+    pub fn initialize_partition(&mut self) -> anyhow::Result<()> {
         if self.wl_partition.is_some() {
             bail!("Already installed");
         }
@@ -45,6 +49,20 @@ impl SPIFlashStorage {
             self.config.partition_label,
             self.config.mount_path
         );
+        Ok(())
+    }
+
+    pub fn mount(&mut self, mount_path: &str, max_fds: usize) -> anyhow::Result<()> {
+        if self.wl_partition.is_none() {
+            bail!("Partition not initialized yet");
+        }
+        if self.mounted_fatfs.is_some() {
+            bail!("File system already mounted");
+        }
+        let mut drive: u8 = 0;
+        esp!(unsafe { ff_diskio_get_drive(&mut drive) })?;
+        let fatfs = unsafe { Fatfs::new_wl_part(drive, self.handle()) }?;
+        self.mounted_fatfs = Some(MountedFatfs::mount(fatfs, mount_path, max_fds)?);
         Ok(())
     }
 }
