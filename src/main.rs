@@ -84,7 +84,7 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
             &WifiConfig {
                 ssid: config.wifi.ssid.clone(),
                 password: config.wifi.password.clone(),
-                auth_method: Some(AuthMethod::from(&config.wifi.auth_method)),
+                auth_method: config.wifi.auth_method.as_ref().map(AuthMethod::from),
             },
             peripherals.modem,
         )?;

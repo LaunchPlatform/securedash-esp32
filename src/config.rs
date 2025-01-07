@@ -3,12 +3,11 @@ use std::fmt::{Debug, Formatter};
 use std::fs::File;
 use std::io::Read;
 
-#[derive(Default, Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub enum AuthMethod {
     None,
     WEP,
     WPA,
-    #[default]
     WPA2Personal,
     WPAWPA2Personal,
     WPA2Enterprise,
@@ -20,7 +19,7 @@ pub enum AuthMethod {
 #[derive(Deserialize)]
 pub struct Wifi {
     pub ssid: String,
-    pub auth_method: AuthMethod,
+    pub auth_method: Option<AuthMethod>,
     // TODO: provide a default way of not storing plaintext? while the key is probably going to
     //       be in the repo or somewhere, but at least they need to know in order to decode?
     pub password: Option<String>,
