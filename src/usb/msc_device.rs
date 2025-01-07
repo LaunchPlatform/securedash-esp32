@@ -1,3 +1,4 @@
+use crate::storage::spiflash::SPIFlashStorage;
 use anyhow::{bail, Context};
 use esp_idf_svc::handle::RawHandle;
 use esp_idf_svc::partition::{EspPartition, EspWlPartition};
@@ -9,13 +10,28 @@ use esp_idf_svc::sys::{
 };
 use std::ffi::CString;
 
+pub trait Storage {
+    fn config_usb(&self, config: &mut tinyusb_msc_spiflash_config_t);
+}
+
+impl Storage for SPIFlashStorage {
+    fn config_usb(&self, config: &mut tinyusb_msc_spiflash_config_t) -> anyhow::Result<()> {
+        config.wl_handle = self.handle();
+        esp!(unsafe { tinyusb_msc_storage_init_spiflash(config) })
+            .with_context(|| "Failed to initialize spiflash")?;
+        Ok(())
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct MSCDeviceConfig {
+    high_speed: bool,
+}
+
 #[derive(Default)]
 pub struct MSCDevice {
-    partition_label: String,
-    mount_path: String,
-    mount_path_c_str: CString,
-    high_speed: bool,
-    wl_partition: Option<EspWlPartition<EspPartition>>,
+    config: MSCDeviceConfig,
+    storage: dyn Storage,
 }
 
 fn msc_event_type_to_str(event_type: tinyusb_msc_event_type_t) -> String {
@@ -35,61 +51,29 @@ unsafe extern "C" fn storage_mount_changed_cb(event: *mut tinyusb_msc_event_t) {
 }
 
 impl MSCDevice {
-    pub fn new(partition_label: &str, base_path: &str, high_speed: bool) -> Self {
-        Self {
-            mount_path: base_path.to_string(),
-            partition_label: partition_label.to_string(),
-            high_speed,
-            ..Default::default()
-        }
+    pub fn new(config: &MSCDeviceConfig, storage: Box<dyn Storage>) -> Box<Self> {
+        Box::new(Self {
+            config: config.clone(),
+            storage,
+        })
     }
 
     pub fn install(&mut self) -> anyhow::Result<()> {
-        if self.wl_partition.is_some() {
-            bail!("Already installed");
-        }
-        let partition = Some(
-            unsafe { EspPartition::new(&self.partition_label) }?.ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Failed to find partition with label {:#?}",
-                    self.partition_label
-                )
-            })?,
-        );
-        let mut wl_partition =
-            Some(EspWlPartition::new(partition.unwrap()).with_context(|| {
-                format!(
-                    "Failed to mount partition {} at {}",
-                    self.partition_label, self.mount_path
-                )
-            })?);
-
-        let config_spi = tinyusb_msc_spiflash_config_t {
-            wl_handle: wl_partition.as_mut().unwrap().handle(),
-            keep_vfs_fat_mount: true,
+        let mut config_spi = tinyusb_msc_spiflash_config_t {
             callback_mount_changed: Some(storage_mount_changed_cb),
             callback_premount_changed: Some(storage_mount_changed_cb),
-            mount_config: esp_vfs_fat_mount_config_t {
-                format_if_mount_failed: false,
-                max_files: 5,
-                allocation_unit_size: 0,
-                disk_status_check_enable: false,
-                use_one_fat: false,
-            },
+            ..Default::default()
         };
-        esp!(unsafe { tinyusb_msc_storage_init_spiflash(&config_spi) })
-            .with_context(|| "Failed to initialize spiflash")?;
+        self.storage.config_usb(&mut config_spi);
 
         let mut tusb_cfg = tinyusb_config_t::default();
-        if self.high_speed {
+        if self.config.high_speed {
             // TODO:
         }
         esp!(unsafe { tinyusb_driver_install(&tusb_cfg) })
             .with_context(|| "Failed to install TinyUSB driver")?;
 
         log::info!("TinyUSB driver installed.");
-
-        self.wl_partition = wl_partition;
         Ok(())
     }
 }
