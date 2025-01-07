@@ -5,49 +5,37 @@ use esp_idf_svc::io::vfs::MountedFatfs;
 use esp_idf_svc::partition::{EspPartition, EspWlPartition};
 use esp_idf_svc::sys::{esp, ff_diskio_get_drive, wl_handle_t};
 
-#[derive(Debug, Clone)]
-pub struct SPIFlashConfig {
-    pub partition_label: String,
-    pub mount_path: String,
-}
-
 pub struct SPIFlashStorage {
-    config: SPIFlashConfig,
     wl_partition: Option<EspWlPartition<EspPartition>>,
     mounted_fatfs: Option<MountedFatfs<Fatfs<()>>>,
 }
 
 impl SPIFlashStorage {
-    pub fn new(config: &SPIFlashConfig) -> Self {
+    pub fn new() -> Self {
         Self {
-            config: config.clone(),
             wl_partition: None,
             mounted_fatfs: None,
         }
     }
 
-    pub fn initialize_partition(&mut self) -> anyhow::Result<()> {
+    pub fn initialize_partition(&mut self, partition_label: &str) -> anyhow::Result<()> {
         if self.wl_partition.is_some() {
             bail!("Already installed");
         }
         let partition = Some(
-            unsafe { EspPartition::new(&self.config.partition_label) }?.ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Failed to find partition with label {:#?}",
-                    self.config.partition_label
-                )
+            unsafe { EspPartition::new(partition_label) }?.ok_or_else(|| {
+                anyhow::anyhow!("Failed to find partition with label {:#?}", partition_label)
             })?,
         );
         self.wl_partition = Some(EspWlPartition::new(partition.unwrap()).with_context(|| {
             format!(
-                "Failed to mount partition {} at {}",
-                self.config.partition_label, self.config.mount_path
+                "Failed to create WL partition for partition with label {}",
+                partition_label,
             )
         })?);
         log::info!(
-            "Mount SPI Flash storage with label {} at {}",
-            self.config.partition_label,
-            self.config.mount_path
+            "Initialized SPI Flash WL partition label {}",
+            partition_label,
         );
         Ok(())
     }

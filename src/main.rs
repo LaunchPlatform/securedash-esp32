@@ -6,8 +6,8 @@ mod wifi;
 
 use crate::api::processor::{process_events, DeviceInfo, DeviceInfoProducer};
 use crate::api::websocket::{ConnectionState, SessionEvent, WebSocketSession};
-use crate::storage::spiflash::{SPIFlashConfig, SPIFlashStorage};
-use crate::usb::msc_device::MSCDevice;
+use crate::storage::spiflash::SPIFlashStorage;
+use crate::usb::msc_device::{MSCDevice, MSCDeviceConfig};
 use crate::wifi::session::WifiSession;
 use embedded_svc::wifi::AuthMethod;
 use embedded_svc::ws::FrameType;
@@ -35,10 +35,10 @@ const MOUNT_PATH: Option<&str> = option_env!("MOUNT_PATH");
 async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     log::info!("Start {} - {}", PKG_NAME, VERSION,);
 
-    let storage = Box::new(SPIFlashStorage::new(&SPIFlashConfig {
-        partition_label: PARTITION_LABEL.unwrap_or("storage").to_string(),
-        mount_path: MOUNT_PATH.unwrap_or("/disk").to_string(),
-    }));
+    let mount_path = MOUNT_PATH.unwrap_or("/disk").to_string();
+    let mut storage = Box::new(SPIFlashStorage::new());
+    storage.initialize_partition(PARTITION_LABEL.unwrap_or("storage"))?;
+    storage.mount(&mount_path, 5);
 
     let peripherals = Peripherals::take()?;
     let mut wifi = WifiSession::new(SSID, PASSWORD, AuthMethod::WPA2Personal, peripherals.modem)?;
@@ -49,7 +49,7 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     let _sntp = EspSntp::new_default()?;
     log::info!("SNTP initialized");
 
-    let mut msc_device = MSCDevice::new(partition_label, mount_path, true);
+    let mut msc_device = MSCDevice::new(&MSCDeviceConfig { high_speed: true }, storage);
     msc_device.install()?;
 
     let mut button = PinDriver::input(peripherals.pins.gpio14)?;
@@ -57,8 +57,9 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
 
     let mut client = WebSocketSession::new(API_ENDPOINT, Duration::from_secs(30));
 
+    let captured_mount_path = mount_path.clone();
+    let mount_path_c_str = CString::new(mount_path.as_bytes())?;
     let device_info_producer: DeviceInfoProducer = Box::new(move || {
-        let mount_path_c_str = CString::new(mount_path.as_bytes()).unwrap();
         let mut total_volume_size: u64 = 0;
         let mut free_volume_size: u64 = 0;
         esp!(unsafe {
@@ -73,7 +74,7 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
             // TODO: maybe pass in Rc of wifi instead?
             wifi_ip: wifi.get_ip_info().unwrap().ip.to_string(),
             local_time: OffsetDateTime::now_utc(),
-            mount_path: mount_path.to_string(),
+            mount_path: captured_mount_path.to_string(),
             total_volume_size,
             free_volume_size,
         })

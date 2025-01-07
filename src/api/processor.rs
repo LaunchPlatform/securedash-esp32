@@ -205,11 +205,11 @@ impl Processor {
 pub async fn process_events(
     mut client: WebSocketSession<'_>,
     device_info_producer: DeviceInfoProducer,
-    root_dir: &str,
+    root_dir: String,
 ) {
     let mut processor: Option<Box<Processor>> = Some(Box::new(Processor {
         device_info_producer,
-        root_dir: root_dir.to_string(),
+        root_dir,
     }));
     client.connect();
 

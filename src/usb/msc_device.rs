@@ -25,7 +25,7 @@ impl Storage for SPIFlashStorage {
 
 #[derive(Default, Clone)]
 pub struct MSCDeviceConfig {
-    high_speed: bool,
+    pub high_speed: bool,
 }
 
 #[derive(Default)]
