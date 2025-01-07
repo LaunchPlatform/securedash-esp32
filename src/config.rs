@@ -21,6 +21,8 @@ pub enum AuthMethod {
 pub struct Wifi {
     pub ssid: String,
     pub auth_method: AuthMethod,
+    // TODO: provide a default way of not storing plaintext? while the key is probably going to
+    //       be in the repo or somewhere, but at least they need to know in order to decode?
     pub password: Option<String>,
 }
 
