@@ -39,7 +39,7 @@ fn load_config(config_file: &str) -> Option<Config> {
     log::info!("Reading config from {}", config_file);
     let config = Config::read(&config_file);
     if let Err(error) = &config {
-        log::error!("Failed to load config: {error}");
+        log::warn!("Failed to load config: {error}");
     }
     let config = config.ok();
     if let Some(config) = &config {
@@ -64,48 +64,51 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     msc_device.install()?;
 
     let peripherals = Peripherals::take()?;
-    /*
-    let mut wifi = WifiSession::new(SSID, PASSWORD, AuthMethod::WPA2Personal, peripherals.modem)?;
-    wifi.connect().await?;
-    log::info!("Connected wifi: {:#?}", wifi.get_ip_info());*/
 
-    // Keep it around or else the SNTP service will stop
-    let _sntp = EspSntp::new_default()?;
-    log::info!("SNTP initialized");
+    let mut wifi: Option<WifiSession> = None;
+    if let Some(config) = config {
+        let mut wifi =
+            WifiSession::new(SSID, PASSWORD, AuthMethod::WPA2Personal, peripherals.modem)?;
+        wifi.connect().await?;
+        log::info!("Connected wifi: {:#?}", wifi.get_ip_info());
 
-    let mut button = PinDriver::input(peripherals.pins.gpio14)?;
-    button.set_pull(Pull::Up)?;
+        // Keep it around or else the SNTP service will stop
+        let _sntp = EspSntp::new_default()?;
+        log::info!("SNTP initialized");
 
-    /*
-    let mut client = WebSocketSession::new(API_ENDPOINT, Duration::from_secs(30));
+        let mut button = PinDriver::input(peripherals.pins.gpio14)?;
+        button.set_pull(Pull::Up)?;
 
-    let captured_mount_path = mount_path.clone();
-    let mount_path_c_str = CString::new(mount_path.as_bytes())?;
-    let device_info_producer: DeviceInfoProducer = Box::new(move || {
-        let mut total_volume_size: u64 = 0;
-        let mut free_volume_size: u64 = 0;
-        esp!(unsafe {
-            esp_vfs_fat_info(
-                mount_path_c_str.as_ptr(),
-                &mut total_volume_size,
-                &mut free_volume_size,
-            )
-        })?;
-        Ok(DeviceInfo {
-            version: VERSION.to_string(),
-            // TODO: maybe pass in Rc of wifi instead?
-            wifi_ip: wifi.get_ip_info().unwrap().ip.to_string(),
-            local_time: OffsetDateTime::now_utc(),
-            mount_path: captured_mount_path.to_string(),
-            total_volume_size,
-            free_volume_size,
-        })
-    });
+        let mut client = WebSocketSession::new(API_ENDPOINT, Duration::from_secs(30));
 
-    button.wait_for_low().await?;
-    log::info!("Button pressed!");
+        let captured_mount_path = mount_path.clone();
+        let mount_path_c_str = CString::new(mount_path.as_bytes())?;
+        let device_info_producer: DeviceInfoProducer = Box::new(move || {
+            let mut total_volume_size: u64 = 0;
+            let mut free_volume_size: u64 = 0;
+            esp!(unsafe {
+                esp_vfs_fat_info(
+                    mount_path_c_str.as_ptr(),
+                    &mut total_volume_size,
+                    &mut free_volume_size,
+                )
+            })?;
+            Ok(DeviceInfo {
+                version: VERSION.to_string(),
+                // TODO: maybe pass in Rc of wifi instead?
+                wifi_ip: wifi.get_ip_info().unwrap().ip.to_string(),
+                local_time: OffsetDateTime::now_utc(),
+                mount_path: captured_mount_path.to_string(),
+                total_volume_size,
+                free_volume_size,
+            })
+        });
 
-    spawner.spawn_local(process_events(client, device_info_producer, mount_path))?;*/
+        button.wait_for_low().await?;
+        log::info!("Button pressed!");
+
+        spawner.spawn_local(process_events(client, device_info_producer, mount_path))?;
+    }
 
     loop {
         // Asynchronously wait for GPIO events, allowing other tasks
