@@ -62,7 +62,7 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
 
     let mut storage = Box::new(SPIFlashStorage::new());
     storage.initialize_partition(partition_label)?;
-    storage.mount(&mount_path, 5);
+    storage.mount(&mount_path, 5)?;
 
     let config = load_config(Path::new(mount_path).join(config_path).to_str().unwrap());
 
