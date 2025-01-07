@@ -6,10 +6,10 @@ mod wifi;
 
 use crate::api::processor::{process_events, DeviceInfo, DeviceInfoProducer};
 use crate::api::websocket::{ConnectionState, SessionEvent, WebSocketSession};
-use crate::config::Config;
+use crate::config::{Config, Wifi};
 use crate::storage::spiflash::SPIFlashStorage;
 use crate::usb::msc_device::{MSCDevice, MSCDeviceConfig};
-use crate::wifi::session::WifiSession;
+use crate::wifi::session::{WifiConfig, WifiSession};
 use embedded_svc::wifi::AuthMethod;
 use embedded_svc::ws::FrameType;
 use esp_idf_svc::hal::gpio::{PinDriver, Pull};
@@ -21,8 +21,8 @@ use futures::task::LocalSpawnExt;
 use std::ffi::CString;
 use std::path::Path;
 use std::rc::Rc;
-use std::thread;
 use std::time::Duration;
+use std::{fmt, thread};
 use time::OffsetDateTime;
 
 const PKG_NAME: &str = env!("CARGO_PKG_NAME");
@@ -48,6 +48,12 @@ fn load_config(config_file: &str) -> Option<Config> {
     config
 }
 
+impl From<config::AuthMethod> for AuthMethod {
+    fn from(value: config::AuthMethod) -> Self {
+        format!("{value:?}").parse().unwrap()
+    }
+}
+
 async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     let partition_label = PARTITION_LABEL.unwrap_or(DEFAULT_PARTITION_LABEL);
     let mount_path = MOUNT_PATH.unwrap_or(DEFAULT_MOUNT_PATH);
@@ -66,9 +72,15 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     let peripherals = Peripherals::take()?;
 
     let mut wifi: Option<WifiSession> = None;
-    if let Some(config) = config {
-        let mut wifi =
-            WifiSession::new(SSID, PASSWORD, AuthMethod::WPA2Personal, peripherals.modem)?;
+    if let Some(config) = &config {
+        let mut wifi = WifiSession::new(
+            &WifiConfig {
+                ssid: config.wifi.ssid.clone(),
+                password: config.wifi.password.clone(),
+                auth_method: Some((&config.wifi.auth_method).into()),
+            },
+            peripherals.modem,
+        )?;
         wifi.connect().await?;
         log::info!("Connected wifi: {:#?}", wifi.get_ip_info());
 

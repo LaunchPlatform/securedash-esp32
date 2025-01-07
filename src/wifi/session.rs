@@ -7,11 +7,11 @@ use esp_idf_svc::sys::EspError;
 use esp_idf_svc::timer::EspTaskTimerService;
 use esp_idf_svc::wifi::{AsyncWifi, EspWifi};
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct WifiConfig {
-    ssid: String,
-    password: Option<String>,
-    auth_method: Option<AuthMethod>,
+    pub ssid: String,
+    pub password: Option<String>,
+    pub auth_method: Option<AuthMethod>,
 }
 
 pub struct WifiSession<'a> {

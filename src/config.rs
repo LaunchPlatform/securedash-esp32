@@ -1,9 +1,9 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Formatter};
 use std::fs::File;
 use std::io::Read;
 
-#[derive(Default, Debug, Deserialize)]
+#[derive(Default, Debug, Deserialize, Serialize)]
 pub enum AuthMethod {
     None,
     WEP,
@@ -19,9 +19,9 @@ pub enum AuthMethod {
 
 #[derive(Deserialize)]
 pub struct Wifi {
-    ssid: String,
-    auth_method: AuthMethod,
-    password: Option<String>,
+    pub ssid: String,
+    pub auth_method: AuthMethod,
+    pub password: Option<String>,
 }
 
 impl Debug for Wifi {
@@ -36,12 +36,12 @@ impl Debug for Wifi {
 
 #[derive(Debug, Deserialize)]
 pub struct Api {
-    endpoint: String,
+    pub endpoint: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Usb {
-    high_speed: bool,
+    pub high_speed: bool,
 }
 
 impl Default for Usb {
@@ -52,9 +52,9 @@ impl Default for Usb {
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    wifi: Wifi,
-    api: Api,
-    usb: Usb,
+    pub wifi: Wifi,
+    pub api: Api,
+    pub usb: Usb,
 }
 
 impl Config {
