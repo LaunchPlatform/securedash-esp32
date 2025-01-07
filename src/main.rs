@@ -48,8 +48,8 @@ fn load_config(config_file: &str) -> Option<Config> {
     config
 }
 
-impl From<config::AuthMethod> for AuthMethod {
-    fn from(value: config::AuthMethod) -> Self {
+impl From<&config::AuthMethod> for AuthMethod {
+    fn from(value: &config::AuthMethod) -> Self {
         format!("{value:?}").parse().unwrap()
     }
 }
@@ -73,20 +73,20 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     let mut button = PinDriver::input(peripherals.pins.gpio14)?;
     button.set_pull(Pull::Up)?;
 
-    let mut _wifi: Option<WifiSession> = None;
+    let mut _wifi: Option<Rc<WifiSession>> = None;
     let mut _sntp: Option<EspSntp> = None;
     if let Some(config) = &config {
         let mut wifi = WifiSession::new(
             &WifiConfig {
                 ssid: config.wifi.ssid.clone(),
                 password: config.wifi.password.clone(),
-                auth_method: Some((&config.wifi.auth_method).into()),
+                auth_method: Some(AuthMethod::from(&config.wifi.auth_method)),
             },
             peripherals.modem,
         )?;
         wifi.connect().await?;
         log::info!("Connected wifi: {:#?}", wifi.get_ip_info());
-        _wifi = Some(wifi);
+        _wifi = Some(Rc::new(wifi));
 
         // Keep it around or else the SNTP service will stop
         _sntp = Some(EspSntp::new_default()?);
@@ -96,6 +96,7 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
 
         let captured_mount_path = mount_path.clone();
         let mount_path_c_str = CString::new(mount_path.as_bytes())?;
+        let wifi_ref = _wifi.unwrap().clone();
         let device_info_producer: DeviceInfoProducer = Box::new(move || {
             let mut total_volume_size: u64 = 0;
             let mut free_volume_size: u64 = 0;
@@ -109,7 +110,7 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
             Ok(DeviceInfo {
                 version: VERSION.to_string(),
                 // TODO: maybe pass in Rc of wifi instead?
-                wifi_ip: wifi.get_ip_info().unwrap().ip.to_string(),
+                wifi_ip: wifi_ref.get_ip_info().unwrap().ip.to_string(),
                 local_time: OffsetDateTime::now_utc(),
                 mount_path: captured_mount_path.to_string(),
                 total_volume_size,
