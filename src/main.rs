@@ -1,6 +1,7 @@
 mod api;
 mod usb;
 mod wifi;
+mod config;
 
 use crate::api::processor::{process_events, DeviceInfo, DeviceInfoProducer};
 use crate::api::websocket::{ConnectionState, SessionEvent, WebSocketSession};
