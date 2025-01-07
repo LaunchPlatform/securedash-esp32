@@ -23,6 +23,9 @@ use std::thread;
 use std::time::Duration;
 use time::OffsetDateTime;
 
+const DEFAULT_PARTITION_LABEL: &str = "storage";
+const DEFAULT_MOUNT_PATH: &str = "/disk";
+
 const PKG_NAME: &str = env!("CARGO_PKG_NAME");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -35,9 +38,9 @@ const MOUNT_PATH: Option<&str> = option_env!("MOUNT_PATH");
 async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     log::info!("Start {} - {}", PKG_NAME, VERSION,);
 
-    let mount_path = MOUNT_PATH.unwrap_or("/disk").to_string();
+    let mount_path = MOUNT_PATH.unwrap_or(DEFAULT_MOUNT_PATH).to_string();
     let mut storage = Box::new(SPIFlashStorage::new());
-    storage.initialize_partition(PARTITION_LABEL.unwrap_or("storage"))?;
+    storage.initialize_partition(PARTITION_LABEL.unwrap_or(DEFAULT_PARTITION_LABEL))?;
     storage.mount(&mount_path, 5);
 
     let peripherals = Peripherals::take()?;

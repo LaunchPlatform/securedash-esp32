@@ -2,14 +2,10 @@ use crate::api::processor::Response::{Error, FetchFileChunk, GetInfo, ListFiles,
 use crate::api::websocket::{ConnectionState, SessionEvent, WebSocketSession};
 use anyhow::anyhow;
 use embedded_svc::ws::FrameType;
-use esp_idf_svc::hal::gpio::Pull;
-use esp_idf_svc::ping::Info;
 use serde::{Deserialize, Serialize};
-use std::fs::{read_dir, FileType};
-use std::io::{Read, Seek};
-use std::mem::MaybeUninit;
+use std::fs::read_dir;
+use std::io::Read;
 use std::path::Path;
-use std::time::SystemTime;
 use time::serde::timestamp::milliseconds;
 use time::OffsetDateTime;
 

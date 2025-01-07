@@ -1,37 +1,35 @@
 use crate::storage::spiflash::SPIFlashStorage;
-use anyhow::{bail, Context};
+use anyhow::Context;
 use esp_idf_svc::handle::RawHandle;
-use esp_idf_svc::partition::{EspPartition, EspWlPartition};
 use esp_idf_svc::sys::{
-    esp, esp_vfs_fat_mount_config_t, tinyusb_config_t, tinyusb_driver_install, tinyusb_msc_event_t,
-    tinyusb_msc_event_type_t, tinyusb_msc_event_type_t_TINYUSB_MSC_EVENT_MOUNT_CHANGED,
+    esp, tinyusb_config_t, tinyusb_driver_install, tinyusb_msc_event_t, tinyusb_msc_event_type_t,
+    tinyusb_msc_event_type_t_TINYUSB_MSC_EVENT_MOUNT_CHANGED,
     tinyusb_msc_event_type_t_TINYUSB_MSC_EVENT_PREMOUNT_CHANGED, tinyusb_msc_spiflash_config_t,
-    tinyusb_msc_storage_init_spiflash, tinyusb_msc_storage_mount,
+    tinyusb_msc_storage_init_spiflash,
 };
-use std::ffi::CString;
+use std::fmt::Debug;
 
 pub trait Storage {
-    fn config_usb(&self, config: &mut tinyusb_msc_spiflash_config_t);
+    fn config_usb(&self, config: &mut tinyusb_msc_spiflash_config_t) -> anyhow::Result<()>;
 }
 
 impl Storage for SPIFlashStorage {
     fn config_usb(&self, config: &mut tinyusb_msc_spiflash_config_t) -> anyhow::Result<()> {
         config.wl_handle = self.handle();
         esp!(unsafe { tinyusb_msc_storage_init_spiflash(config) })
-            .with_context(|| "Failed to initialize spiflash")?;
+            .with_context(|| "Failed to initialize spiflash for msc storage")?;
         Ok(())
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct MSCDeviceConfig {
     pub high_speed: bool,
 }
 
-#[derive(Default)]
 pub struct MSCDevice {
     config: MSCDeviceConfig,
-    storage: dyn Storage,
+    storage: Box<dyn Storage>,
 }
 
 fn msc_event_type_to_str(event_type: tinyusb_msc_event_type_t) -> String {

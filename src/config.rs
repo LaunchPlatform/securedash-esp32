@@ -1,5 +1,7 @@
 use serde::Deserialize;
 use std::fmt::{Debug, Formatter};
+use std::fs::File;
+use std::io::Read;
 
 #[derive(Default, Debug, Deserialize)]
 pub enum AuthMethod {
@@ -16,7 +18,7 @@ pub enum AuthMethod {
 }
 
 #[derive(Deserialize)]
-struct Wifi {
+pub struct Wifi {
     ssid: String,
     auth_method: AuthMethod,
     password: Option<String>,
@@ -33,12 +35,12 @@ impl Debug for Wifi {
 }
 
 #[derive(Debug, Deserialize)]
-struct Api {
+pub struct Api {
     endpoint: String,
 }
 
 #[derive(Debug, Deserialize)]
-struct Usb {
+pub struct Usb {
     high_speed: bool,
 }
 
@@ -49,8 +51,16 @@ impl Default for Usb {
 }
 
 #[derive(Debug, Deserialize)]
-struct Config {
+pub struct Config {
     wifi: Wifi,
     api: Api,
     usb: Usb,
+}
+
+impl Config {
+    pub fn read(file_path: &str) -> anyhow<Self> {
+        let mut config_str = String::new();
+        File::open(file_path)?.read_to_string(&mut config_str)?;
+        toml::from_str(&*config_str)?
+    }
 }
