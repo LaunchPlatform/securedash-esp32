@@ -40,6 +40,10 @@ fn load_config(config_file: &str) -> Option<Config> {
     let config = Config::read(&config_file);
     if let Err(error) = &config {
         log::warn!("Failed to load config: {error}");
+        // TODO: keep reading if encounter "No such device (os error 19)"?
+        //       this means file system not formatted.
+        //       maybe if the user formatted and put a config file into the folder, we should
+        //       make it connects to their wifi and API immediately?
     }
     let config = config.ok();
     if let Some(config) = &config {
