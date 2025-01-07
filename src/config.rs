@@ -58,9 +58,9 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn read(file_path: &str) -> anyhow<Self> {
+    pub fn read(file_path: &str) -> anyhow::Result<Self> {
         let mut config_str = String::new();
         File::open(file_path)?.read_to_string(&mut config_str)?;
-        toml::from_str(&*config_str)?
+        Ok(toml::from_str(&*config_str)?)
     }
 }

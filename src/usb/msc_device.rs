@@ -71,7 +71,7 @@ impl MSCDevice {
         esp!(unsafe { tinyusb_driver_install(&tusb_cfg) })
             .with_context(|| "Failed to install TinyUSB driver")?;
 
-        log::info!("TinyUSB driver installed.");
+        log::info!("TinyUSB MSC driver installed.");
         Ok(())
     }
 }
