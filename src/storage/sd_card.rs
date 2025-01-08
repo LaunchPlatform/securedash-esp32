@@ -1,12 +1,22 @@
 use anyhow::bail;
 use esp_idf_svc::fs::fatfs::Fatfs;
 use esp_idf_svc::hal::gpio;
-use esp_idf_svc::hal::peripherals::Peripherals;
-use esp_idf_svc::hal::sd::mmc::{SdMmcHostConfiguration, SdMmcHostDriver};
+use esp_idf_svc::hal::gpio::{Gpio33, Gpio34, Gpio35, Gpio36, Gpio37, Gpio38};
+use esp_idf_svc::hal::sd::mmc::{SdMmcHostConfiguration, SdMmcHostDriver, SDMMC1};
 use esp_idf_svc::hal::sd::{SdCardConfiguration, SdCardDriver};
 use esp_idf_svc::handle::RawHandle;
 use esp_idf_svc::io::vfs::MountedFatfs;
 use esp_idf_svc::sys::{esp, ff_diskio_get_drive};
+
+pub struct SDCardPeripherals {
+    pub sdmmc1: SDMMC1,
+    pub cmd: Gpio35,
+    pub clk: Gpio36,
+    pub d0: Gpio37,
+    pub d1: Gpio38,
+    pub d2: Gpio33,
+    pub d3: Gpio34,
+}
 
 pub struct SDCardStorage<'a> {
     sd_card_driver: Option<SdCardDriver<SdMmcHostDriver<'a>>>,
@@ -20,23 +30,22 @@ impl<'a> SDCardStorage<'a> {
             mounted_fatfs: None,
         }
     }
-    pub fn install_driver(&mut self, peripherals: &mut Peripherals) -> anyhow::Result<()> {
+    pub fn install_driver(&mut self, peripherals: SDCardPeripherals) -> anyhow::Result<()> {
         if self.mounted_fatfs.is_some() {
             bail!("File system already mounted");
         }
         if self.sd_card_driver.is_some() {
             bail!("Driver already installed");
         }
-        let pins = &mut peripherals.pins;
         self.sd_card_driver = Some(SdCardDriver::new_mmc(
             SdMmcHostDriver::new_4bits(
-                peripherals.sdmmc0,
-                pins.gpio35,
-                pins.gpio36,
-                pins.gpio37,
-                pins.gpio38,
-                pins.gpio33,
-                pins.gpio34,
+                peripherals.sdmmc1,
+                peripherals.cmd,
+                peripherals.clk,
+                peripherals.d0,
+                peripherals.d1,
+                peripherals.d2,
+                peripherals.d3,
                 None::<gpio::AnyIOPin>,
                 None::<gpio::AnyIOPin>,
                 &SdMmcHostConfiguration::new(),
