@@ -49,11 +49,11 @@ unsafe extern "C" fn storage_mount_changed_cb(event: *mut tinyusb_msc_event_t) {
 }
 
 impl MSCDevice {
-    pub fn new(config: &MSCDeviceConfig, storage: Box<dyn Storage>) -> Box<Self> {
-        Box::new(Self {
+    pub fn new(config: &MSCDeviceConfig, storage: Box<dyn Storage>) -> Self {
+        Self {
             config: config.clone(),
             storage,
-        })
+        }
     }
 
     pub fn install(&mut self) -> anyhow::Result<()> {
