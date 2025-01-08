@@ -1,2 +1,2 @@
 pub mod spiflash;
-pub mod ssd;
+pub mod sd_card;

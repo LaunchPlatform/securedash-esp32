@@ -8,12 +8,12 @@ use esp_idf_svc::handle::RawHandle;
 use esp_idf_svc::io::vfs::MountedFatfs;
 use esp_idf_svc::sys::{esp, ff_diskio_get_drive};
 
-pub struct SSDStorage<'a> {
+pub struct SDCardStorage<'a> {
     sd_card_driver: Option<SdCardDriver<SdMmcHostDriver<'a>>>,
     mounted_fatfs: Option<MountedFatfs<Fatfs<()>>>,
 }
 
-impl SSDStorage {
+impl SDCardStorage {
     pub fn new() -> Self {
         Self {
             sd_card_driver: None,
@@ -42,7 +42,7 @@ impl SSDStorage {
 
     pub fn mount(&mut self, mount_path: &str, max_fds: usize) -> anyhow::Result<()> {
         if self.sd_card_driver.is_none() {
-            bail!("Driver not installed yet");
+            bail!("SD card driver not installed yet");
         }
         if self.mounted_fatfs.is_some() {
             bail!("File system already mounted");
