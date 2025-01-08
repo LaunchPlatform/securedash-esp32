@@ -566,8 +566,7 @@ dependencies = [
 [[package]]
 name = "esp-idf-hal"
 version = "0.45.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe0ccc4f052a54a06611227e3ff4fce499da99d0e13ec8da02db25aa1ddeca98"
+source = "git+https://github.com/LaunchPlatform/esp-idf-hal?rev=ec432eae61fdbeecaaf05a7bd33b8ffa738911ab#ec432eae61fdbeecaaf05a7bd33b8ffa738911ab"
 dependencies = [
  "atomic-waker",
  "critical-section",

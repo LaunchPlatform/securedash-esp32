@@ -47,3 +47,4 @@ embuild = "0.33"
 [patch.crates-io]
 embuild = { git = "https://github.com/esp-rs/embuild" }
 esp-idf-sys = { git = "https://github.com/esp-rs/esp-idf-sys" }
+esp-idf-hal = { git = "https://github.com/LaunchPlatform/esp-idf-hal", rev = "ec432eae61fdbeecaaf05a7bd33b8ffa738911ab" }

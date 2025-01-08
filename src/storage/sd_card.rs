@@ -18,6 +18,21 @@ pub struct SDCardPeripherals {
     pub d3: Gpio34,
 }
 
+#[macro_export]
+macro_rules! sd_peripherals {
+    ($x:expr ) => {
+        SDCardPeripherals {
+            slot: $x.sdmmc1,
+            cmd: $x.pins.gpio35,
+            clk: $x.pins.gpio36,
+            d0: $x.pins.gpio37,
+            d1: $x.pins.gpio38,
+            d2: $x.pins.gpio33,
+            d3: $x.pins.gpio34,
+        }
+    };
+}
+
 pub struct SDCardStorage<'a> {
     sd_card_driver: Option<SdCardDriver<SdMmcHostDriver<'a>>>,
     mounted_fatfs: Option<MountedFatfs<Fatfs<SdCardDriver<SdMmcHostDriver<'a>>>>>,
