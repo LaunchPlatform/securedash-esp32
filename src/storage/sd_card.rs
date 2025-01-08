@@ -9,7 +9,7 @@ use esp_idf_svc::io::vfs::MountedFatfs;
 use esp_idf_svc::sys::{esp, ff_diskio_get_drive};
 
 pub struct SDCardPeripherals {
-    pub sdmmc1: SDMMC1,
+    pub slot: SDMMC1,
     pub cmd: Gpio35,
     pub clk: Gpio36,
     pub d0: Gpio37,
@@ -39,7 +39,7 @@ impl<'a> SDCardStorage<'a> {
         }
         self.sd_card_driver = Some(SdCardDriver::new_mmc(
             SdMmcHostDriver::new_4bits(
-                peripherals.sdmmc1,
+                peripherals.slot,
                 peripherals.cmd,
                 peripherals.clk,
                 peripherals.d0,
