@@ -70,7 +70,13 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
 
     let config = load_config(Path::new(mount_path).join(config_path).to_str().unwrap());
 
-    let mut msc_device = MSCDevice::new(&MSCDeviceConfig { high_speed: true }, storage);
+    let mut msc_config = MSCDeviceConfig::default();
+    if let Some(config) = &config {
+        if let Some(usb) = &config.usb {
+            msc_config.high_speed = usb.high_speed;
+        }
+    }
+    let mut msc_device = MSCDevice::new(&msc_config, storage);
     msc_device.install()?;
 
     let peripherals = Peripherals::take()?;
