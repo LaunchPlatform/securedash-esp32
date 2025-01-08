@@ -52,6 +52,10 @@ impl<'a> SDCardStorage<'a> {
         if self.sd_card_driver.is_some() {
             bail!("Driver already installed");
         }
+        let mut host_config = SdMmcHostConfiguration::new();
+        // Notice: the dev board use external pullups
+        // TODO: make this configurable?
+        host_config.enable_internal_pullups = false;
         self.sd_card_driver = Some(SdCardDriver::new_mmc(
             SdMmcHostDriver::new_4bits(
                 peripherals.slot,
@@ -63,7 +67,7 @@ impl<'a> SDCardStorage<'a> {
                 peripherals.d3,
                 None::<gpio::AnyIOPin>,
                 None::<gpio::AnyIOPin>,
-                &SdMmcHostConfiguration::new(),
+                &host_config,
             )?,
             &SdCardConfiguration::new(),
         )?);
