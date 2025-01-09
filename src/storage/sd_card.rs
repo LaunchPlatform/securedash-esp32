@@ -5,7 +5,7 @@ use esp_idf_svc::hal::gpio::{Gpio33, Gpio34, Gpio35, Gpio36, Gpio37, Gpio38};
 use esp_idf_svc::hal::sd::mmc::{SdMmcHostConfiguration, SdMmcHostDriver, SDMMC1};
 use esp_idf_svc::hal::sd::{SdCardConfiguration, SdCardDriver};
 use esp_idf_svc::io::vfs::MountedFatfs;
-use esp_idf_svc::sys::{esp, ff_diskio_get_drive, sdmmc_card_t};
+use esp_idf_svc::sys::{esp, ff_diskio_get_drive, sdmmc_card_t, SDMMC_FREQ_HIGHSPEED};
 use std::borrow::Borrow;
 use std::mem::replace;
 
@@ -69,6 +69,9 @@ impl<'a> SDCardStorage<'a> {
         // Notice: the dev board use external pullups
         // TODO: make this configurable?
         host_config.enable_internal_pullups = false;
+        let mut card_config = SdCardConfiguration::new();
+        // TODO: make this config
+        card_config.speed_khz = SDMMC_FREQ_HIGHSPEED;
         self.state = SDCardState::DriverInstalled {
             driver: SdCardDriver::new_mmc(
                 SdMmcHostDriver::new_4bits(
@@ -83,7 +86,7 @@ impl<'a> SDCardStorage<'a> {
                     None::<gpio::AnyIOPin>,
                     &host_config,
                 )?,
-                &SdCardConfiguration::new(),
+                &card_config,
             )?,
         };
         Ok(())
