@@ -3,6 +3,7 @@ mod config;
 mod storage;
 mod usb;
 mod wifi;
+mod benchmarks;
 
 use crate::api::processor::{process_events, DeviceInfo, DeviceInfoProducer};
 use crate::api::websocket::{ConnectionState, SessionEvent, WebSocketSession};
