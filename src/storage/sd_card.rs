@@ -6,11 +6,8 @@ use esp_idf_svc::hal::sd::mmc::{SdMmcHostConfiguration, SdMmcHostDriver, SDMMC1}
 use esp_idf_svc::hal::sd::{SdCardConfiguration, SdCardDriver};
 use esp_idf_svc::io::vfs::MountedFatfs;
 use esp_idf_svc::sys::{esp, ff_diskio_get_drive, sdmmc_card_t};
-use std::borrow::{Borrow, BorrowMut};
-use std::cell::RefCell;
+use std::borrow::Borrow;
 use std::mem::replace;
-use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
 
 pub struct SDCardPeripherals {
     pub slot: SDMMC1,
@@ -37,50 +34,14 @@ macro_rules! sd_peripherals {
     };
 }
 
-pub struct SDDriverHolder<'a> {
-    driver: Rc<RefCell<SdCardDriver<SdMmcHostDriver<'a>>>>,
-}
-
-impl<'a> Clone for SDDriverHolder<'a> {
-    fn clone(&self) -> Self {
-        Self {
-            driver: Rc::clone(&self.driver),
-        }
-    }
-}
-
-impl<'a> SDDriverHolder<'a> {
-    fn new(driver: SdCardDriver<SdMmcHostDriver<'a>>) -> Self {
-        Self {
-            driver: Rc::new(RefCell::new(driver)),
-        }
-    }
-
-    fn card(&self) -> &sdmmc_card_t {
-        self.driver.deref().borrow().card()
-    }
-}
-
-impl<'a> Borrow<SdCardDriver<SdMmcHostDriver<'a>>> for SDDriverHolder<'a> {
-    fn borrow(&self) -> &SdCardDriver<SdMmcHostDriver<'a>> {
-        self.driver.deref().borrow().deref()
-    }
-}
-
-impl<'a> BorrowMut<SdCardDriver<SdMmcHostDriver<'a>>> for SDDriverHolder<'a> {
-    fn borrow_mut(self: &mut SDDriverHolder<'a>) -> &mut SdCardDriver<SdMmcHostDriver<'a>> {
-        self.driver.deref().borrow_mut().deref_mut()
-    }
-}
-
 pub enum SDCardState<'a> {
     Init,
     DriverInstalled {
-        driver: SDDriverHolder<'a>,
+        driver: SdCardDriver<SdMmcHostDriver<'a>>,
     },
     Mounted {
-        driver: SDDriverHolder<'a>,
-        mounted_fatfs: MountedFatfs<Fatfs<SDDriverHolder<'a>>>,
+        card: sdmmc_card_t,
+        mounted_fatfs: MountedFatfs<Fatfs<SdCardDriver<SdMmcHostDriver<'a>>>>,
     },
 }
 
@@ -109,7 +70,7 @@ impl<'a> SDCardStorage<'a> {
         // TODO: make this configurable?
         host_config.enable_internal_pullups = false;
         self.state = SDCardState::DriverInstalled {
-            driver: SDDriverHolder::new(SdCardDriver::new_mmc(
+            driver: SdCardDriver::new_mmc(
                 SdMmcHostDriver::new_4bits(
                     peripherals.slot,
                     peripherals.cmd,
@@ -123,7 +84,7 @@ impl<'a> SDCardStorage<'a> {
                     &host_config,
                 )?,
                 &SdCardConfiguration::new(),
-            )?),
+            )?,
         };
         Ok(())
     }
@@ -139,9 +100,10 @@ impl<'a> SDCardStorage<'a> {
             SDCardState::DriverInstalled { mut driver } => {
                 let mut drive: u8 = 0;
                 esp!(unsafe { ff_diskio_get_drive(&mut drive) })?;
-                let fatfs = Fatfs::new_sdcard(drive, driver.clone())?;
+                let card = driver.card().clone();
+                let fatfs = Fatfs::new_sdcard(drive, driver)?;
                 SDCardState::Mounted {
-                    driver,
+                    card,
                     mounted_fatfs: MountedFatfs::mount(fatfs, mount_path, max_fds)?,
                 }
             }
@@ -153,7 +115,7 @@ impl<'a> SDCardStorage<'a> {
         match &self.state {
             SDCardState::Init => None,
             SDCardState::DriverInstalled { driver } => Some(driver.card()),
-            SDCardState::Mounted { driver, .. } => Some(driver.card()),
+            SDCardState::Mounted { card, .. } => Some(card),
             _ => None,
         }
     }
