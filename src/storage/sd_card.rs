@@ -90,7 +90,7 @@ impl<'a> SDCardStorage<'a> {
     }
 
     pub fn mount(&mut self, mount_path: &str, max_fds: usize) -> anyhow::Result<()> {
-        match replace(&mut self.state, SDCardState::Init) {
+        self.state = match replace(&mut self.state, SDCardState::Init) {
             SDCardState::Init => {
                 bail!("Driver not installed yet");
             }
@@ -116,7 +116,6 @@ impl<'a> SDCardStorage<'a> {
             SDCardState::Init => None,
             SDCardState::DriverInstalled { driver } => Some(driver.card()),
             SDCardState::Mounted { card, .. } => Some(card),
-            _ => None,
         }
     }
 }

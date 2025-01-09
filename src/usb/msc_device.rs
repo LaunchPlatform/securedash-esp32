@@ -32,7 +32,7 @@ impl Storage for SDCardStorage<'_> {
             ..Default::default()
         };
         esp!(unsafe { tinyusb_msc_storage_init_sdmmc(&config) })
-            .with_context(|| "Failed to initialize spiflash for msc storage")?;
+            .with_context(|| "Failed to initialize sd for msc storage")?;
         Ok(())
     }
 }
