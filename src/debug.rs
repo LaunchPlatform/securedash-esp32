@@ -83,6 +83,12 @@ impl Debug for CardInfo<'_> {
             .field("rca", &self.card.rca)
             .field("max_freq_khz", &self.card.max_freq_khz)
             .field("real_freq_khz", &self.card.real_freq_khz)
+            .field("is_mem", &self.card.is_mem())
+            .field("is_sdio", &self.card.is_sdio())
+            .field("is_mmc", &self.card.is_mmc())
+            .field("num_io_functions", &self.card.num_io_functions())
+            .field("log_bus_width", &self.card.log_bus_width())
+            .field("is_ddr", &self.card.is_ddr())
             .finish()
     }
 }
