@@ -39,7 +39,7 @@ impl StorageBenchmark {
         );
         log::info!(
             "throughput={} MB/s",
-            ((self.file_size as f64) / (1024.0 * 1024.0)) / (duration.as_secs() as f64)
+            ((self.file_size as f64) / (1024.0 * 1024.0)) / duration.as_secs_f64()
         );
         Ok(duration)
     }
@@ -65,7 +65,7 @@ impl StorageBenchmark {
         log::info!(
             "avg throughput={} MB/s",
             ((self.file_size as f64) * (self.loop_times as f64) / (1024.0 * 1024.0))
-                / (total.as_secs() as f64)
+                / total.as_secs_f64()
         );
 
         Ok(())
