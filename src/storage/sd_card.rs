@@ -4,9 +4,11 @@ use esp_idf_svc::hal::gpio;
 use esp_idf_svc::hal::gpio::{Gpio33, Gpio34, Gpio35, Gpio36, Gpio37, Gpio38};
 use esp_idf_svc::hal::sd::mmc::{SdMmcHostConfiguration, SdMmcHostDriver, SDMMC1};
 use esp_idf_svc::hal::sd::{SdCardConfiguration, SdCardDriver};
-use esp_idf_svc::handle::RawHandle;
 use esp_idf_svc::io::vfs::MountedFatfs;
 use esp_idf_svc::sys::{esp, ff_diskio_get_drive, sdmmc_card_t};
+use std::borrow::{Borrow, BorrowMut};
+use std::mem::replace;
+use std::rc::Rc;
 
 pub struct SDCardPeripherals {
     pub slot: SDMMC1,
@@ -33,63 +35,117 @@ macro_rules! sd_peripherals {
     };
 }
 
+#[derive(Clone)]
+pub struct SDDriverHolder<'a> {
+    driver: Rc<SdCardDriver<SdMmcHostDriver<'a>>>,
+}
+
+impl<'a> SDDriverHolder<'a> {
+    fn new(driver: SdCardDriver<SdMmcHostDriver<'a>>) -> Self {
+        Self {
+            driver: Rc::new(driver),
+        }
+    }
+
+    fn card(&self) -> &sdmmc_card_t {
+        self.driver.as_ref().card()
+    }
+}
+
+impl<'a> Borrow<SdCardDriver<SdMmcHostDriver<'a>>> for SDDriverHolder<'a> {
+    fn borrow(&self) -> &SdCardDriver<SdMmcHostDriver<'a>> {
+        self.driver.as_ref()
+    }
+}
+
+impl<'a> BorrowMut<SdCardDriver<SdMmcHostDriver<'a>>> for SDDriverHolder<'a> {
+    fn borrow_mut(self: &mut SDDriverHolder<'a>) -> &mut SdCardDriver<SdMmcHostDriver<'a>> {
+        Rc::get_mut(&mut self.driver).unwrap()
+    }
+}
+
+pub enum SDCardState<'a> {
+    Init,
+    DriverInstalled {
+        driver: SDDriverHolder<'a>,
+    },
+    Mounted {
+        driver: SDDriverHolder<'a>,
+        mounted_fatfs: MountedFatfs<Fatfs<SDDriverHolder<'a>>>,
+    },
+}
+
 pub struct SDCardStorage<'a> {
-    sd_card_driver: Option<SdCardDriver<SdMmcHostDriver<'a>>>,
-    mounted_fatfs: Option<MountedFatfs<Fatfs<SdCardDriver<SdMmcHostDriver<'a>>>>>,
+    state: SDCardState<'a>,
 }
 
 impl<'a> SDCardStorage<'a> {
     pub fn new() -> Self {
         Self {
-            sd_card_driver: None,
-            mounted_fatfs: None,
+            state: SDCardState::Init,
         }
     }
     pub fn install_driver(&mut self, peripherals: SDCardPeripherals) -> anyhow::Result<()> {
-        if self.mounted_fatfs.is_some() {
-            bail!("File system already mounted");
-        }
-        if self.sd_card_driver.is_some() {
-            bail!("Driver already installed");
+        match &self.state {
+            SDCardState::DriverInstalled { .. } => {
+                bail!("Driver already installed");
+            }
+            SDCardState::Mounted { .. } => {
+                bail!("File system already mounted");
+            }
+            _ => {}
         }
         let mut host_config = SdMmcHostConfiguration::new();
         // Notice: the dev board use external pullups
         // TODO: make this configurable?
         host_config.enable_internal_pullups = false;
-        self.sd_card_driver = Some(SdCardDriver::new_mmc(
-            SdMmcHostDriver::new_4bits(
-                peripherals.slot,
-                peripherals.cmd,
-                peripherals.clk,
-                peripherals.d0,
-                peripherals.d1,
-                peripherals.d2,
-                peripherals.d3,
-                None::<gpio::AnyIOPin>,
-                None::<gpio::AnyIOPin>,
-                &host_config,
-            )?,
-            &SdCardConfiguration::new(),
-        )?);
+        self.state = SDCardState::DriverInstalled {
+            driver: SDDriverHolder::new(SdCardDriver::new_mmc(
+                SdMmcHostDriver::new_4bits(
+                    peripherals.slot,
+                    peripherals.cmd,
+                    peripherals.clk,
+                    peripherals.d0,
+                    peripherals.d1,
+                    peripherals.d2,
+                    peripherals.d3,
+                    None::<gpio::AnyIOPin>,
+                    None::<gpio::AnyIOPin>,
+                    &host_config,
+                )?,
+                &SdCardConfiguration::new(),
+            )?),
+        };
         Ok(())
     }
 
     pub fn mount(&mut self, mount_path: &str, max_fds: usize) -> anyhow::Result<()> {
-        if self.mounted_fatfs.is_some() {
-            bail!("File system already mounted");
-        } else {
-            if self.sd_card_driver.is_none() {
-                bail!("SD card driver not installed yet");
+        match replace(&mut self.state, SDCardState::Init) {
+            SDCardState::Init => {
+                bail!("Driver not installed yet");
             }
-        }
-        let mut drive: u8 = 0;
-        esp!(unsafe { ff_diskio_get_drive(&mut drive) })?;
-        let fatfs = Fatfs::new_sdcard(drive, self.sd_card_driver.take().unwrap())?;
-        self.mounted_fatfs = Some(MountedFatfs::mount(fatfs, mount_path, max_fds)?);
+            SDCardState::Mounted { .. } => {
+                bail!("File system already mounted");
+            }
+            SDCardState::DriverInstalled { mut driver } => {
+                let mut drive: u8 = 0;
+                esp!(unsafe { ff_diskio_get_drive(&mut drive) })?;
+                let fatfs = Fatfs::new_sdcard(drive, driver.clone())?;
+                SDCardState::Mounted {
+                    driver,
+                    mounted_fatfs: MountedFatfs::mount(fatfs, mount_path, max_fds)?,
+                }
+            }
+        };
         Ok(())
     }
 
     pub fn card(&self) -> Option<&sdmmc_card_t> {
-        self.sd_card_driver.as_ref().map(SdCardDriver::card)
+        match &self.state {
+            SDCardState::Init => None,
+            SDCardState::DriverInstalled { driver } => Some(driver.card()),
+            SDCardState::Mounted { driver, .. } => Some(driver.card()),
+            _ => None,
+        }
     }
 }
