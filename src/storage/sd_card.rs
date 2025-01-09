@@ -35,9 +35,16 @@ macro_rules! sd_peripherals {
     };
 }
 
-#[derive(Clone)]
 pub struct SDDriverHolder<'a> {
     driver: Rc<SdCardDriver<SdMmcHostDriver<'a>>>,
+}
+
+impl<'a> Clone for SDDriverHolder<'a> {
+    fn clone(&self) -> Self {
+        Self {
+            driver: Rc::clone(&self.driver),
+        }
+    }
 }
 
 impl<'a> SDDriverHolder<'a> {
