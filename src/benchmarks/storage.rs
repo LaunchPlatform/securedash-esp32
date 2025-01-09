@@ -22,7 +22,7 @@ impl StorageBenchmark {
             .create(true)
             .write(true)
             .open(&self.path)?;
-        while true {
+        while remaining_size > 0 {
             let chunk_size = min(self.chunk_size, remaining_size);
             let _written = file.write(&buf[..chunk_size])?;
             // Notice: somehow there's a bug or what making written size returning 0, which is
@@ -30,7 +30,7 @@ impl StorageBenchmark {
             //         based on the size we have written
             remaining_size -= chunk_size;
         }
-        file.sync_all();
+        file.sync_all()?;
         let end = SystemTime::now();
         let duration = end.duration_since(start)?;
         log::info!(
