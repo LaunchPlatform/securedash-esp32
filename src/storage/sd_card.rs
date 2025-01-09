@@ -7,7 +7,9 @@ use esp_idf_svc::hal::sd::{SdCardConfiguration, SdCardDriver};
 use esp_idf_svc::io::vfs::MountedFatfs;
 use esp_idf_svc::sys::{esp, ff_diskio_get_drive, sdmmc_card_t};
 use std::borrow::{Borrow, BorrowMut};
+use std::cell::RefCell;
 use std::mem::replace;
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 
 pub struct SDCardPeripherals {
@@ -36,7 +38,7 @@ macro_rules! sd_peripherals {
 }
 
 pub struct SDDriverHolder<'a> {
-    driver: Rc<SdCardDriver<SdMmcHostDriver<'a>>>,
+    driver: Rc<RefCell<SdCardDriver<SdMmcHostDriver<'a>>>>,
 }
 
 impl<'a> Clone for SDDriverHolder<'a> {
@@ -50,24 +52,24 @@ impl<'a> Clone for SDDriverHolder<'a> {
 impl<'a> SDDriverHolder<'a> {
     fn new(driver: SdCardDriver<SdMmcHostDriver<'a>>) -> Self {
         Self {
-            driver: Rc::new(driver),
+            driver: Rc::new(RefCell::new(driver)),
         }
     }
 
     fn card(&self) -> &sdmmc_card_t {
-        self.driver.as_ref().card()
+        self.driver.deref().borrow().card()
     }
 }
 
 impl<'a> Borrow<SdCardDriver<SdMmcHostDriver<'a>>> for SDDriverHolder<'a> {
     fn borrow(&self) -> &SdCardDriver<SdMmcHostDriver<'a>> {
-        self.driver.as_ref()
+        self.driver.deref().borrow().deref()
     }
 }
 
 impl<'a> BorrowMut<SdCardDriver<SdMmcHostDriver<'a>>> for SDDriverHolder<'a> {
     fn borrow_mut(self: &mut SDDriverHolder<'a>) -> &mut SdCardDriver<SdMmcHostDriver<'a>> {
-        Rc::get_mut(&mut self.driver).unwrap()
+        self.driver.deref().borrow_mut().deref_mut()
     }
 }
 
