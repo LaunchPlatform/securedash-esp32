@@ -27,9 +27,9 @@ impl StorageBenchmark {
         file.sync_all();
         let end = SystemTime::now();
         let duration = end.duration_since(start)?;
-        log::info!("Finish write test with total time {duration}");
+        log::info!("Finish write test with total time {} sec", duration.as_secs());
         log::info!(
-            "throughput={:,} MB/s",
+            "throughput={} MB/s",
             ((self.file_size as f64) / (1024.0 * 1024.0)) / (duration.as_secs() as f64)
         );
         Ok(duration)
@@ -47,15 +47,15 @@ impl StorageBenchmark {
             durations.push(duration);
         }
 
-        let total = durations.iter().sum();
+        let total: Duration = durations.iter().sum();
         log::info!(
-            "Finish {} write test with total time {}",
+            "Finish {} write test with total time {} sec",
             self.loop_times,
-            total
+            total.as_secs()
         );
         log::info!(
-            "avg throughput={:,} MB/s",
-            ((self.file_size as f64) * self.loop_times / (1024.0 * 1024.0))
+            "avg throughput={} MB/s",
+            ((self.file_size as f64) * (self.loop_times as f64) / (1024.0 * 1024.0))
                 / (total.as_secs() as f64)
         );
 
