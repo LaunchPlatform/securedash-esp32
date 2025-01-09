@@ -71,7 +71,7 @@ impl MSCDevice {
     }
 
     pub fn install(&mut self) -> anyhow::Result<()> {
-        self.storage.config_usb();
+        self.storage.config_usb()?;
 
         let mut tusb_cfg = tinyusb_config_t::default();
         if self.config.high_speed {
