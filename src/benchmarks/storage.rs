@@ -13,7 +13,6 @@ pub struct StorageBenchmark {
 
 impl StorageBenchmark {
     pub fn run_once(&self) -> anyhow::Result<Duration> {
-        log::info!("Running write test with config={self:#?}");
         let buf: Vec<u8> = vec![1; self.chunk_size];
         let mut remaining_size = self.file_size;
 
@@ -34,17 +33,18 @@ impl StorageBenchmark {
         let end = SystemTime::now();
         let duration = end.duration_since(start)?;
         log::info!(
-            "Finish write test with total time {} sec",
-            duration.as_secs()
+            "Finish write test with total time {:.2} sec",
+            duration.as_secs_f64()
         );
         log::info!(
-            "throughput={} MB/s",
+            "throughput={:.2} MB/s",
             ((self.file_size as f64) / (1024.0 * 1024.0)) / duration.as_secs_f64()
         );
         Ok(duration)
     }
 
     pub fn run(&self) -> anyhow::Result<()> {
+        log::info!("Running write test with config={self:#?}");
         let mut durations = Vec::<Duration>::with_capacity(self.loop_times);
         for idx in (0..self.loop_times) {
             log::info!(
@@ -58,12 +58,12 @@ impl StorageBenchmark {
 
         let total: Duration = durations.iter().sum();
         log::info!(
-            "Finish {} write test with total time {} sec",
+            "Finish {} write test with total time {:.2} sec",
             self.loop_times,
-            total.as_secs()
+            total.as_secs_f64()
         );
         log::info!(
-            "avg throughput={} MB/s",
+            "avg throughput={:.2} MB/s",
             ((self.file_size as f64) * (self.loop_times as f64) / (1024.0 * 1024.0))
                 / total.as_secs_f64()
         );
