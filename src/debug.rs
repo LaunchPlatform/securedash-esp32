@@ -28,6 +28,7 @@ impl Debug for HostInfo<'_> {
             .field("slot", &self.host.slot)
             .field("max_freq_khz", &self.host.max_freq_khz)
             .field("command_timeout_ms", &self.host.command_timeout_ms)
+            .field("input_delay_phase", &self.host.input_delay_phase)
             .finish()
     }
 }
