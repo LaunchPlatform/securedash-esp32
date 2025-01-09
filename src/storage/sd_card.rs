@@ -6,7 +6,7 @@ use esp_idf_svc::hal::sd::mmc::{SdMmcHostConfiguration, SdMmcHostDriver, SDMMC1}
 use esp_idf_svc::hal::sd::{SdCardConfiguration, SdCardDriver};
 use esp_idf_svc::handle::RawHandle;
 use esp_idf_svc::io::vfs::MountedFatfs;
-use esp_idf_svc::sys::{esp, ff_diskio_get_drive};
+use esp_idf_svc::sys::{esp, ff_diskio_get_drive, sdmmc_card_t};
 
 pub struct SDCardPeripherals {
     pub slot: SDMMC1,
@@ -84,8 +84,12 @@ impl<'a> SDCardStorage<'a> {
         }
         let mut drive: u8 = 0;
         esp!(unsafe { ff_diskio_get_drive(&mut drive) })?;
-        let fatfs = unsafe { Fatfs::new_sdcard(drive, self.sd_card_driver.take().unwrap()) }?;
+        let fatfs = Fatfs::new_sdcard(drive, self.sd_card_driver.take().unwrap())?;
         self.mounted_fatfs = Some(MountedFatfs::mount(fatfs, mount_path, max_fds)?);
         Ok(())
+    }
+
+    pub fn card(&self) -> Option<&sdmmc_card_t> {
+        self.sd_card_driver.as_ref().map(SdCardDriver::card)
     }
 }

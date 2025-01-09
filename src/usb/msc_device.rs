@@ -1,27 +1,41 @@
+use crate::storage::sd_card::SDCardStorage;
 use crate::storage::spiflash::SPIFlashStorage;
 use anyhow::Context;
 use esp_idf_svc::handle::RawHandle;
-use esp_idf_svc::sys::{
-    esp, tinyusb_config_t, tinyusb_driver_install, tinyusb_msc_event_t, tinyusb_msc_event_type_t,
-    tinyusb_msc_event_type_t_TINYUSB_MSC_EVENT_MOUNT_CHANGED,
-    tinyusb_msc_event_type_t_TINYUSB_MSC_EVENT_PREMOUNT_CHANGED, tinyusb_msc_spiflash_config_t,
-    tinyusb_msc_storage_init_spiflash,
-};
+use esp_idf_svc::sys::{esp, tinyusb_config_t, tinyusb_driver_install, tinyusb_msc_event_t, tinyusb_msc_event_type_t, tinyusb_msc_event_type_t_TINYUSB_MSC_EVENT_MOUNT_CHANGED, tinyusb_msc_event_type_t_TINYUSB_MSC_EVENT_PREMOUNT_CHANGED, tinyusb_msc_sdmmc_config_t, tinyusb_msc_spiflash_config_t, tinyusb_msc_storage_init_sdmmc, tinyusb_msc_storage_init_spiflash};
 use std::fmt::Debug;
 
 pub trait Storage {
-    fn config_usb(&self, config: &mut tinyusb_msc_spiflash_config_t) -> anyhow::Result<()>;
+    fn config_usb(&self) -> anyhow::Result<()>;
 }
 
 impl Storage for SPIFlashStorage {
-    fn config_usb(&self, config: &mut tinyusb_msc_spiflash_config_t) -> anyhow::Result<()> {
-        config.wl_handle = self.handle();
-        esp!(unsafe { tinyusb_msc_storage_init_spiflash(config) })
+    fn config_usb(&self) -> anyhow::Result<()> {
+        let config = tinyusb_msc_spiflash_config_t {
+            wl_handle: self.handle(),
+            callback_mount_changed: Some(storage_mount_changed_cb),
+            callback_premount_changed: Some(storage_mount_changed_cb),
+            ..Default::default()
+        };
+        esp!(unsafe { tinyusb_msc_storage_init_spiflash(&config) })
             .with_context(|| "Failed to initialize spiflash for msc storage")?;
         Ok(())
     }
 }
 
+impl Storage for SDCardStorage<'_> {
+    fn config_usb(&self) -> anyhow::Result<()> {
+        let config = tinyusb_msc_sdmmc_config_t {
+            card: self.card().unwrap(),
+            callback_mount_changed: Some(storage_mount_changed_cb),
+            callback_premount_changed: Some(storage_mount_changed_cb),
+            ..Default::default()
+        };
+        esp!(unsafe { tinyusb_msc_storage_init_sdmmc(&config) })
+            .with_context(|| "Failed to initialize spiflash for msc storage")?;
+        Ok(())
+    }
+}
 #[derive(Debug, Default, Clone)]
 pub struct MSCDeviceConfig {
     pub high_speed: bool,
@@ -57,12 +71,7 @@ impl MSCDevice {
     }
 
     pub fn install(&mut self) -> anyhow::Result<()> {
-        let mut config_spi = tinyusb_msc_spiflash_config_t {
-            callback_mount_changed: Some(storage_mount_changed_cb),
-            callback_premount_changed: Some(storage_mount_changed_cb),
-            ..Default::default()
-        };
-        self.storage.config_usb(&mut config_spi);
+        self.storage.config_usb();
 
         let mut tusb_cfg = tinyusb_config_t::default();
         if self.config.high_speed {
