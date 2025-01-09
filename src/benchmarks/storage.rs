@@ -67,7 +67,7 @@ impl StorageBenchmark {
             ((self.file_size as f64) * (self.loop_times as f64) / (1024.0 * 1024.0))
                 / total.as_secs_f64()
         );
-
+        log::info!("Finish write benchmark");
         Ok(())
     }
 }
