@@ -105,6 +105,9 @@ impl<'a> SDCardStorage<'a> {
             SDCardState::DriverInstalled { mut driver } => {
                 let mut drive: u8 = 0;
                 esp!(unsafe { ff_diskio_get_drive(&mut drive) })?;
+                // TODO: we assume the card data won't change here. It seems like at this point
+                //       this struct should stay the same without any update? May need to
+                //       read the source code to double check
                 let card = driver.card().clone();
                 let fatfs = Fatfs::new_sdcard(drive, driver)?;
                 SDCardState::Mounted {
