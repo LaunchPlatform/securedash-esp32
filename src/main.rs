@@ -1,26 +1,36 @@
 mod api;
+mod benchmarks;
 mod config;
+mod debug;
 mod storage;
 mod usb;
 mod wifi;
-mod benchmarks;
 
 use crate::api::processor::{process_events, DeviceInfo, DeviceInfoProducer};
 use crate::api::websocket::{ConnectionState, SessionEvent, WebSocketSession};
+use crate::benchmarks::storage::StorageBenchmark;
 use crate::config::{Config, Wifi};
+use crate::debug::CardInfo;
+use crate::storage::sd_card::{SDCardPeripherals, SDCardStorage};
 use crate::storage::spiflash::SPIFlashStorage;
 use crate::usb::msc_device::{MSCDevice, MSCDeviceConfig};
 use crate::wifi::session::{WifiConfig, WifiSession};
 use embedded_svc::wifi::AuthMethod;
 use embedded_svc::ws::FrameType;
-use esp_idf_svc::hal::gpio::{PinDriver, Pull};
+use esp_idf_svc::hal::gpio::{Gpio10, PinDriver, Pull};
+use esp_idf_svc::hal::peripheral::Peripheral;
 use esp_idf_svc::hal::prelude::Peripherals;
 use esp_idf_svc::sntp::EspSntp;
-use esp_idf_svc::sys::{esp, esp_vfs_fat_info, free};
+use esp_idf_svc::sys::{esp, esp_vfs_fat_info, free, sdmmc_card_t};
+use esp_idf_svc::timer::EspTimerService;
 use futures::executor::{LocalPool, LocalSpawner};
 use futures::task::LocalSpawnExt;
 use std::ffi::CString;
+use std::fmt::{Debug, Formatter};
+use std::fs::read_dir;
+use std::ops::Deref;
 use std::path::Path;
+use std::ptr::replace;
 use std::rc::Rc;
 use std::time::Duration;
 use std::{fmt, thread};
@@ -65,24 +75,21 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
     let config_path = CONFIG_PATH.unwrap_or(DEFAULT_CONFIG_PATH);
     log::info!("Start {PKG_NAME} - version={VERSION}, partition_label={partition_label}, mount_path={mount_path}, config_path={config_path}");
 
-    let mut storage = Box::new(SPIFlashStorage::new());
-    storage.initialize_partition(partition_label)?;
+    let mut peripherals = Peripherals::take()?;
+    let mut storage = Box::new(SDCardStorage::new());
+    storage.install_driver(sd_peripherals!(peripherals))?;
     storage.mount(&mount_path, 5)?;
+
+    log::info!("SD Card: {:#?}", CardInfo::new(&storage.card().unwrap()));
+
+    let mut button = PinDriver::input(peripherals.pins.gpio14)?;
+    button.set_pull(Pull::Up)?;
 
     let config = load_config(Path::new(mount_path).join(config_path).to_str().unwrap());
 
     let mut msc_config = MSCDeviceConfig::default();
-    if let Some(config) = &config {
-        if let Some(usb) = &config.usb {
-            msc_config.high_speed = usb.high_speed;
-        }
-    }
     let mut msc_device = MSCDevice::new(&msc_config, storage);
     msc_device.install()?;
-
-    let peripherals = Peripherals::take()?;
-    let mut button = PinDriver::input(peripherals.pins.gpio14)?;
-    button.set_pull(Pull::Up)?;
 
     let mut _wifi: Option<Rc<WifiSession>> = None;
     let mut _sntp: Option<EspSntp> = None;
@@ -129,9 +136,6 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
             })
         });
 
-        button.wait_for_low().await?;
-        log::info!("Button pressed!");
-
         spawner.spawn_local(process_events(
             client,
             device_info_producer,
@@ -139,17 +143,10 @@ async fn run_async(spawner: LocalSpawner) -> Result<(), anyhow::Error> {
         ))?;
     }
 
+    let timer_service = EspTimerService::new().unwrap();
+    let mut timer = timer_service.timer_async()?;
     loop {
-        // Asynchronously wait for GPIO events, allowing other tasks
-        // to run, or the core to sleep.
-        button.wait_for_low().await?;
-        log::info!("Button pressed!");
-
-        // let contents = fs::read_to_string("/disk/myfile.txt").unwrap_or(String::from("N/A"));
-        // log::info!("File content: {}", contents);
-
-        button.wait_for_high().await?;
-        log::info!("Button released!");
+        timer.after(Duration::from_secs(1)).await?;
     }
 
     Ok(())
