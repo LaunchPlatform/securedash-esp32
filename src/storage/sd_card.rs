@@ -5,9 +5,7 @@ use esp_idf_svc::hal::gpio::{Gpio33, Gpio34, Gpio35, Gpio36, Gpio37, Gpio38};
 use esp_idf_svc::hal::sd::mmc::{SdMmcHostConfiguration, SdMmcHostDriver, SDMMC1};
 use esp_idf_svc::hal::sd::{SdCardConfiguration, SdCardDriver};
 use esp_idf_svc::io::vfs::MountedFatfs;
-use esp_idf_svc::sys::{
-    esp, ff_diskio_get_drive, sdmmc_card_t, SDMMC_FREQ_52M,
-};
+use esp_idf_svc::sys::{esp, ff_diskio_get_drive, sdmmc_card_t, SDMMC_FREQ_52M};
 use std::borrow::Borrow;
 use std::mem::replace;
 

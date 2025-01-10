@@ -11,7 +11,7 @@ dependencies:
       git: https://github.com/LaunchPlatform/esp-usb.git
       path: device/esp_tinyusb
       type: git
-    version: 3791a8aed0ba9a348aa4d4ba68533c3465f2de37
+    version: 9ccb5b19bdbf0bc0b4b7fef2a89848b45da09ed8
   espressif/esp_websocket_client:
     component_hash: 8280960def8af4f84bc58d2d76f55357cd1387775cbc2e0a6b3ca229aa7e209e
     dependencies:
@@ -43,6 +43,6 @@ dependencies:
 direct_dependencies:
 - espressif/esp_tinyusb
 - espressif/esp_websocket_client
-manifest_hash: e2f641f1ac1a635507f2760b29746791646b3ce9407b5c5b8cf00e952d7acb10
+manifest_hash: 4731fcaaa873e0e74a6a0007033ea74af79c3c8ce60680055d7ca9d6a4ffcf75
 target: esp32s3
 version: 2.0.0
