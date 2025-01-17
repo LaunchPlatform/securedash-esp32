@@ -7,6 +7,10 @@ Therefore, we open-sourced it regardless.
 Please read the article [ESP32 Tesla dashcam remote USB project in Rust failed. Here's what I've learned](https://fangpenlin.com/posts/2025/01/17/my-rust-esp32-project-failure/) to learn more about the story of this project.
 We won't provide any updates or bug fixing for this project at this moment.
 
+> [!WARNING]  
+> Please note that this project is **ABADDONED** for now due to the limited ESP32 SD card and USB speed.
+> If you purchase ESP32-S3-USB-OTG and try to use it as your Tesla Dashcam USB drive, it probably **WON'T WORK**.
+
 # Hardware
 
 We developed this system with [ESP32-S3-USB-OTG](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s3/esp32-s3-usb-otg/user_guide.html).
