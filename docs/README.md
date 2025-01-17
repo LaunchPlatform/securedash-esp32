@@ -128,3 +128,7 @@ For example:
 ```
 
 Not implemented yet.
+
+# Alternatives
+
+- [teslausb](https://github.com/marcone/teslausb)
