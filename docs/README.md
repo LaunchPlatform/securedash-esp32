@@ -1,15 +1,15 @@
 # SecureDash-ESP32
 
+> [!WARNING]  
+> Please note that this project is **ABADDONED** for now due to the limited ESP32 SD card and USB speed.
+> If you purchase ESP32-S3-USB-OTG and try to use it as your Tesla Dashcam USB drive, it probably **WON'T WORK**.
+
 SecureDash-ESP is an ESP32-based wireless accessible Tesla USB drive written in Rust.
 The author made a mistake and forgot to check the possible read/write speed limit of the SD card and USB; as a result, **it cannot sustain the needs of its original purpose**.
 Despite that, it might still be educational and potentially useful for some use cases that don't require high-speed IOs.
 Therefore, we open-sourced it regardless.
 Please read the article [ESP32 Tesla dashcam remote USB project in Rust failed. Here's what I've learned](https://fangpenlin.com/posts/2025/01/17/my-rust-esp32-project-failure/) to learn more about the story of this project.
 We won't provide any updates or bug fixing for this project at this moment.
-
-> [!WARNING]  
-> Please note that this project is **ABADDONED** for now due to the limited ESP32 SD card and USB speed.
-> If you purchase ESP32-S3-USB-OTG and try to use it as your Tesla Dashcam USB drive, it probably **WON'T WORK**.
 
 # Hardware
 
