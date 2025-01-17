@@ -33,7 +33,7 @@ auth_method = "WPA3Personal"
 
 Please note that the `auth_method` is optional.
 By default, `WPA2Personal` will be used if it is not provided.
-The all available `auth_method` options can be found here.
+The all available `auth_method` options can be found [here](https://github.com/LaunchPlatform/securedash-esp32/blob/cff762a9cd502c62caabc0c75c4b9111c88bac02/src/config.rs#L7-L17).
 
 ## API
 
